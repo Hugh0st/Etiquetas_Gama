@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c ' *)",
+      "Bash(where python *)",
+      "Bash(where py *)",
+      "Bash(py --version)",
+      "Bash(python -c ' *)",
+      "Bash(python -c \"import django; print\\(django.get_version\\(\\)\\)\")",
+      "Bash(pip show *)",
+      "Bash(python -m venv --help)",
+      "Bash(python -m pip --version)",
+      "Bash(python -m venv venv)",
+      "Bash(\"./venv/Scripts/python.exe\" -m pip install --upgrade pip)",
+      "Bash(\"./venv/Scripts/python.exe\" -m pip install django)",
+      "Bash(\"./venv/Scripts/python.exe\" -m django startproject etiquetasgama .)",
+      "Bash(\"./venv/Scripts/python.exe\" manage.py startapp core)",
+      "Bash(\"./venv/Scripts/python.exe\" manage.py makemigrations core)",
+      "Bash(\"./venv/Scripts/python.exe\" manage.py migrate)",
+      "Bash(\"./venv/Scripts/python.exe\" manage.py importar_csv \"ARCHIVOS XLS\")",
+      "Bash(iconv -f latin-1 -t utf-8)",
+      "Bash(./venv/Scripts/python.exe manage.py shell -c ' *)",
+      "Bash(\"./venv/Scripts/python.exe\" manage.py check)"
+    ]
+  }
+}
