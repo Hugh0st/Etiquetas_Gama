@@ -29,9 +29,16 @@ class Cliente(models.Model):
 
 
 class Producto(models.Model):
+    UNIDAD_KGS = 'KGS.'
+    UNIDAD_LTS = 'LTS.'
+    UNIDAD_CHOICES = [
+        (UNIDAD_KGS, 'Kilogramos'),
+        (UNIDAD_LTS, 'Litros'),
+    ]
+
     modelo = models.CharField(max_length=20, primary_key=True)
     descripcion = models.CharField(max_length=255, blank=True)
-    unidad = models.CharField(max_length=20, blank=True)
+    unidad = models.CharField(max_length=4, choices=UNIDAD_CHOICES, default=UNIDAD_KGS)
     cas = models.CharField(max_length=50, blank=True)
     onu = models.CharField(max_length=50, blank=True)
     activo = models.BooleanField(default=True)

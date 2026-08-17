@@ -6,6 +6,19 @@ from django.db import transaction
 
 from core.models import Cliente, LineaEspecificacion, Producto
 
+UNIDAD_H87 = 'H87'
+
+# Mapea las variantes sucias del sistema anterior a los dos valores válidos.
+NORMALIZACION_UNIDAD = {
+    'KGS.': Producto.UNIDAD_KGS,
+    'KGS': Producto.UNIDAD_KGS,
+    'KGM': Producto.UNIDAD_KGS,
+    'KGM.': Producto.UNIDAD_KGS,
+    'LTR.': Producto.UNIDAD_LTS,
+    'LTR': Producto.UNIDAD_LTS,
+    'LTS.': Producto.UNIDAD_LTS,
+}
+
 
 def leer_csv(ruta):
     """Lee un CSV probando utf-8 y cayendo a latin-1 si falla."""
@@ -123,17 +136,31 @@ class Command(BaseCommand):
 
         creados = 0
         actualizados = 0
-        omitidos = 0
+        omitidos_duplicado = 0
+        omitidos_h87 = 0
+        unidad_desconocida = []
 
         for fila in filas:
             modelo = fila['MODELO']
             if modelo in duplicados:
-                omitidos += 1
+                omitidos_duplicado += 1
+                continue
+
+            unidad_original = fila.get('UNIDAD', '')
+            if unidad_original == UNIDAD_H87:
+                # Unidad usada en el sistema anterior para vender artículos
+                # que no son productos químicos. Ya no aplica: se omite.
+                omitidos_h87 += 1
+                continue
+
+            unidad = NORMALIZACION_UNIDAD.get(unidad_original)
+            if unidad is None:
+                unidad_desconocida.append((modelo, unidad_original))
                 continue
 
             valores = dict(
                 descripcion=fila.get('DESCRI', ''),
-                unidad=fila.get('UNIDAD', ''),
+                unidad=unidad,
                 cas=fila.get('CAS', ''),
                 onu=fila.get('ONU', ''),
             )
@@ -153,8 +180,10 @@ class Command(BaseCommand):
             'filas': len(filas),
             'creados': creados,
             'actualizados': actualizados,
-            'omitidos_por_duplicado': omitidos,
+            'omitidos_por_duplicado': omitidos_duplicado,
             'duplicados': duplicados,
+            'omitidos_por_h87': omitidos_h87,
+            'unidad_desconocida': unidad_desconocida,
         }
 
     # ------------------------------------------------------------------
@@ -228,6 +257,14 @@ class Command(BaseCommand):
             w(self.style.WARNING(f"  MODELO duplicado ({len(productos['duplicados'])}): {', '.join(productos['duplicados'])}"))
         else:
             w('  Sin MODELO duplicados.')
+        w(f"  Omitidos (unidad H87, intencional): {productos['omitidos_por_h87']}")
+        if productos['unidad_desconocida']:
+            detalle = ', '.join(f'{modelo}={unidad!r}' for modelo, unidad in productos['unidad_desconocida'])
+            w(self.style.WARNING(
+                f"  Unidad no reconocida, NO importados ({len(productos['unidad_desconocida'])}): {detalle}"
+            ))
+        else:
+            w('  Sin valores de unidad no reconocidos.')
 
         w('')
         w(self.style.MIGRATE_HEADING('== Especificaciones (%s, encoding=%s) ==' % (espec['archivo'], espec['encoding'])))

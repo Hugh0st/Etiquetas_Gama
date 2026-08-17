@@ -20,7 +20,9 @@
       "Bash(\"./venv/Scripts/python.exe\" manage.py importar_csv \"ARCHIVOS XLS\")",
       "Bash(iconv -f latin-1 -t utf-8)",
       "Bash(./venv/Scripts/python.exe manage.py shell -c ' *)",
-      "Bash(\"./venv/Scripts/python.exe\" manage.py check)"
+      "Bash(\"./venv/Scripts/python.exe\" manage.py check)",
+      "Bash(./venv/Scripts/python.exe -c ' *)",
+      "Bash(\"./venv/Scripts/python.exe\" manage.py migrate core)"
     ]
   }
 }
