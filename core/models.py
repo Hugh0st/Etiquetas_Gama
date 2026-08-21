@@ -1,5 +1,6 @@
 from django.conf import settings
-from django.db import models
+from django.db import IntegrityError, models, transaction
+from django.utils import timezone
 
 
 class Cliente(models.Model):
@@ -26,6 +27,27 @@ class Cliente(models.Model):
 
     def __str__(self):
         return f'{self.codigo} - {self.nombre_corto or self.razon_social}'
+
+    def a_snapshot(self):
+        """Datos congelados al emitir un pedido. El certificado imprime razon_social."""
+        return {
+            'codigo': self.codigo,
+            'nombre_corto': self.nombre_corto,
+            'razon_social': self.razon_social,
+            'direccion': self.direccion,
+            'numero_exterior': self.numero_exterior,
+            'numero_interior': self.numero_interior,
+            'colonia': self.colonia,
+            'municipio': self.municipio,
+            'ciudad': self.ciudad,
+            'estado': self.estado,
+            'pais': self.pais,
+            'cp': self.cp,
+            'rfc': self.rfc,
+            'tel1': self.tel1,
+            'tel2': self.tel2,
+            'email': self.email,
+        }
 
 
 class Producto(models.Model):
@@ -65,8 +87,14 @@ class LineaEspecificacion(models.Model):
         return f'{self.producto_id} [{self.orden}] {self.texto}'
 
 
+class PedidoSinResultados(Exception):
+    """Se intentó emitir un pedido sin ningún resultado de laboratorio capturado."""
+
+
 class Pedido(models.Model):
-    folio = models.AutoField(primary_key=True)
+    # El folio (formato ####-AAMM) solo se asigna al emitir el certificado;
+    # un borrador se identifica por su id interno. Ver Pedido.emitir().
+    folio = models.CharField(max_length=9, unique=True, null=True, blank=True)
     cliente = models.ForeignKey(Cliente, on_delete=models.PROTECT, related_name='pedidos')
     fecha = models.DateTimeField(auto_now_add=True)
     usuario_creador = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='pedidos')
@@ -75,10 +103,59 @@ class Pedido(models.Model):
     cliente_snapshot = models.JSONField(null=True, blank=True)
 
     class Meta:
-        ordering = ['-folio']
+        ordering = ['-id']
 
     def __str__(self):
-        return f'Pedido {self.folio} - {self.cliente_id}'
+        return f'Pedido {self.folio or f"(borrador {self.id})"} - {self.cliente_id}'
+
+    @property
+    def tiene_resultados(self):
+        return ResultadoLaboratorio.objects.filter(renglon__pedido=self).exclude(texto='').exists()
+
+    def emitir(self):
+        """Asigna folio, congela los snapshots y marca el pedido como emitido.
+
+        El folio se calcula con la fecha de emisión (no la fecha del pedido).
+        Como SQLite no soporta bloqueo de filas real, la protección contra
+        condiciones de carrera se hace reintentando ante un choque de folio
+        único (dos emisiones simultáneas no pueden terminar con el mismo).
+        """
+        if self.emitido:
+            return
+        if not self.tiene_resultados:
+            raise PedidoSinResultados('El pedido no tiene resultados de laboratorio capturados.')
+
+        ahora = timezone.now()
+        prefijo = ahora.strftime('%y%m')
+
+        for _ in range(10):
+            try:
+                with transaction.atomic():
+                    ultimo = (
+                        Pedido.objects.select_for_update()
+                        .filter(folio__endswith=f'-{prefijo}')
+                        .order_by('-folio')
+                        .first()
+                    )
+                    consecutivo = int(ultimo.folio[:4]) + 1 if ultimo else 1
+
+                    self.folio = f'{consecutivo:04d}-{prefijo}'
+                    self.fecha_emision = ahora
+                    self.emitido = True
+                    self.cliente_snapshot = self.cliente.a_snapshot()
+                    self.save()
+
+                    for renglon in self.renglones.select_related('producto'):
+                        renglon.especificacion_snapshot = [
+                            {'orden': linea.orden, 'texto': linea.texto}
+                            for linea in renglon.producto.especificacion.all()
+                        ]
+                        renglon.save(update_fields=['especificacion_snapshot'])
+                return
+            except IntegrityError:
+                continue
+
+        raise RuntimeError('No se pudo asignar folio después de varios intentos. Intenta de nuevo.')
 
 
 class RenglonPedido(models.Model):
@@ -86,6 +163,8 @@ class RenglonPedido(models.Model):
     producto = models.ForeignKey(Producto, on_delete=models.PROTECT, related_name='renglones_pedido')
     cantidad = models.DecimalField(max_digits=12, decimal_places=3)
     unidad = models.CharField(max_length=20, blank=True)
+    cas = models.CharField(max_length=50, blank=True)
+    onu = models.CharField(max_length=50, blank=True)
     barriles = models.IntegerField(default=0)
     paquetes = models.IntegerField(default=0)
     lote = models.CharField(max_length=100, blank=True)

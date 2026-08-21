@@ -1,0 +1,90 @@
+<div class="renglon">
+    {{ form.id }}
+    {{ form.DELETE }}
+    <div class="renglon-cabecera">
+        <span class="renglon-titulo">Renglón</span>
+        <button type="button" class="quitar-renglon">Quitar</button>
+    </div>
+
+    {% if form.non_field_errors %}
+    <ul class="errores">
+        {% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+
+    <div class="campo campo-producto">
+        <label>Producto</label>
+        <input type="text" class="buscar-producto" autocomplete="off"
+               value="{% if form.instance.pk %}{{ form.instance.producto.modelo }} — {{ form.instance.producto.descripcion }}{% endif %}"
+               placeholder="Modelo o descripción">
+        <ul class="resultados" hidden></ul>
+        {{ form.producto.errors }}
+        {{ form.producto }}
+    </div>
+
+    <div class="campo">
+        <label for="{{ form.unidad.id_for_label }}">{{ form.unidad.label }}</label>
+        {{ form.unidad }}
+    </div>
+    <div class="campo">
+        <label for="{{ form.cas.id_for_label }}">{{ form.cas.label }}</label>
+        {{ form.cas }}
+    </div>
+    <div class="campo">
+        <label for="{{ form.onu.id_for_label }}">{{ form.onu.label }}</label>
+        {{ form.onu }}
+    </div>
+    <div class="campo">
+        <label for="{{ form.cantidad.id_for_label }}">{{ form.cantidad.label }}</label>
+        {{ form.cantidad }}
+        {{ form.cantidad.errors }}
+    </div>
+    <div class="campo">
+        <label for="{{ form.barriles.id_for_label }}">{{ form.barriles.label }}</label>
+        {{ form.barriles }}
+    </div>
+    <div class="campo">
+        <label for="{{ form.paquetes.id_for_label }}">{{ form.paquetes.label }}</label>
+        {{ form.paquetes }}
+    </div>
+    <div class="campo">
+        <label for="{{ form.lote.id_for_label }}">{{ form.lote.label }}</label>
+        {{ form.lote }}
+    </div>
+    <div class="campo">
+        <label for="{{ form.salida.id_for_label }}">{{ form.salida.label }}</label>
+        {{ form.salida }}
+    </div>
+    <div class="campo">
+        <label for="{{ form.peso_bruto.id_for_label }}">{{ form.peso_bruto.label }}</label>
+        {{ form.peso_bruto }}
+    </div>
+    <div class="campo">
+        <label for="{{ form.peso_tara.id_for_label }}">{{ form.peso_tara.label }}</label>
+        {{ form.peso_tara }}
+    </div>
+    <div class="campo">
+        <label>Peso neto</label>
+        <input type="text" class="peso-neto" readonly value="{% if form.instance.pk %}{{ form.instance.peso_neto|default_if_none:'' }}{% endif %}">
+    </div>
+    <div class="campo">
+        <label for="{{ form.caducidad_mes.id_for_label }}">Caducidad</label>
+        <div class="campo-mes-anio">
+            {{ form.caducidad_mes }}
+            {{ form.caducidad_anio }}
+        </div>
+        {{ form.caducidad_mes.errors }}
+        {{ form.caducidad_anio.errors }}
+        {{ form.caducidad }}
+    </div>
+    <div class="campo">
+        <label for="{{ form.produccion_mes.id_for_label }}">Producción</label>
+        <div class="campo-mes-anio">
+            {{ form.produccion_mes }}
+            {{ form.produccion_anio }}
+        </div>
+        {{ form.produccion_mes.errors }}
+        {{ form.produccion_anio.errors }}
+        {{ form.produccion }}
+    </div>
+</div>

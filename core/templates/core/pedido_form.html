@@ -1,0 +1,61 @@
+{% extends 'core/base.html' %}
+{% load static %}
+{% block titulo %}{% if pedido %}Editar borrador #{{ pedido.pk }}{% else %}Nuevo pedido{% endif %} — Esencias Gama{% endblock %}
+{% block content %}
+<h1>{% if pedido %}Editar borrador #{{ pedido.pk }}{% else %}Nuevo pedido{% endif %}</h1>
+
+<form method="post" id="form-pedido" novalidate>
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+    <ul class="errores">
+        {% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+
+    <div class="encabezado-pedido">
+        <div class="campo campo-cliente">
+            <label for="buscar-cliente">Cliente</label>
+            <input type="text" id="buscar-cliente" autocomplete="off"
+                   value="{% if pedido %}{{ pedido.cliente.codigo }} — {{ pedido.cliente.razon_social|default:pedido.cliente.nombre_corto }}{% endif %}"
+                   placeholder="Código, nombre corto o razón social" autofocus>
+            <ul class="resultados" hidden></ul>
+            {{ form.cliente.errors }}
+            {{ form.cliente }}
+        </div>
+        {% if pedido %}
+        <div class="campo">
+            <label>Fecha</label>
+            <input type="text" readonly value="{{ pedido.fecha|date:'d/m/Y' }}">
+        </div>
+        {% endif %}
+    </div>
+
+    <h2>Renglones</h2>
+    {% if formset.non_form_errors %}
+    <ul class="errores">
+        {% for error in formset.non_form_errors %}<li>{{ error }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+
+    {{ formset.management_form }}
+    <div id="renglones-lista" data-prefix="{{ formset.prefix }}">
+        {% for form in formset %}
+        {% include 'core/_renglon_form.html' with form=form %}
+        {% endfor %}
+    </div>
+
+    <button type="button" id="agregar-renglon">+ Agregar renglón</button>
+
+    <template id="renglon-vacio">
+        {% include 'core/_renglon_form.html' with form=formset.empty_form %}
+    </template>
+
+    <div class="acciones">
+        <button type="submit" class="boton">Guardar</button>
+        <a href="{% if pedido %}{% url 'pedido_detail' pedido.pk %}{% else %}{% url 'pedido_list' %}{% endif %}">Cancelar</a>
+    </div>
+</form>
+
+<script src="{% static 'core/pedidos.js' %}"></script>
+{% endblock %}

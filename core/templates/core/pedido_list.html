@@ -1,0 +1,56 @@
+{% extends 'core/base.html' %}
+{% block titulo %}Pedidos — Esencias Gama{% endblock %}
+{% block content %}
+<div class="encabezado-lista">
+    <h1>Pedidos</h1>
+    <a class="boton" href="{% url 'pedido_create' %}">Nuevo pedido</a>
+</div>
+
+<form method="get" class="filtros">
+    <input type="text" name="q" value="{{ q }}" placeholder="Folio o cliente" autofocus>
+    <select name="estado">
+        <option value="" {% if estado == '' %}selected{% endif %}>Todos los estados</option>
+        <option value="borrador" {% if estado == 'borrador' %}selected{% endif %}>Borrador</option>
+        <option value="con_resultados" {% if estado == 'con_resultados' %}selected{% endif %}>Con resultados</option>
+        <option value="emitido" {% if estado == 'emitido' %}selected{% endif %}>Emitido</option>
+    </select>
+    <button type="submit">Buscar</button>
+</form>
+
+<table class="tabla">
+    <thead>
+        <tr>
+            <th>Folio</th>
+            <th>Cliente</th>
+            <th>Fecha</th>
+            <th>Renglones</th>
+            <th>Estado</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for pedido in pedidos %}
+        <tr>
+            <td>
+                <a href="{% url 'pedido_detail' pedido.pk %}">
+                    {% if pedido.folio %}{{ pedido.folio }}{% else %}Borrador #{{ pedido.pk }}{% endif %}
+                </a>
+            </td>
+            <td>{{ pedido.cliente.codigo }} — {{ pedido.cliente.razon_social|default:pedido.cliente.nombre_corto }}</td>
+            <td>{{ pedido.fecha|date:'d/m/Y' }}</td>
+            <td>{{ pedido.num_renglones }}</td>
+            <td>
+                {% if pedido.emitido %}
+                <span class="etiqueta etiqueta-emitido">Emitido</span>
+                {% elif pedido.num_resultados > 0 %}
+                <span class="etiqueta etiqueta-resultados">Con resultados</span>
+                {% else %}
+                <span class="etiqueta etiqueta-borrador">Borrador</span>
+                {% endif %}
+            </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5">No hay pedidos que coincidan con la búsqueda.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

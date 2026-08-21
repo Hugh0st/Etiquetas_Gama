@@ -22,7 +22,14 @@
       "Bash(./venv/Scripts/python.exe manage.py shell -c ' *)",
       "Bash(\"./venv/Scripts/python.exe\" manage.py check)",
       "Bash(./venv/Scripts/python.exe -c ' *)",
-      "Bash(\"./venv/Scripts/python.exe\" manage.py migrate core)"
+      "Bash(\"./venv/Scripts/python.exe\" manage.py migrate core)",
+      "Bash(\"./venv/Scripts/python.exe\" \"C:\\\\Users\\\\hugoc\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-hugoc-Desktop-Esencias-Gama-EtiquetasGama\\\\ef4d533e-b444-4bcb-aa61-bf91f6cf197f\\\\scratchpad\\\\smoke_test.py\")",
+      "Bash(\"./venv/Scripts/python.exe\" manage.py shell)",
+      "Bash(\"./venv/Scripts/python.exe\" manage.py makemigrations core --no-input)",
+      "Bash(\"./venv/Scripts/python.exe\" manage.py makemigrations --check --dry-run core)",
+      "Bash(\"./venv/Scripts/python.exe\" manage.py migrate core 0006)",
+      "Bash(\"./venv/Scripts/python.exe\" manage.py makemigrations --check --dry-run)",
+      "Bash(\"./venv/Scripts/python.exe\" manage.py showmigrations core)"
     ]
   }
 }

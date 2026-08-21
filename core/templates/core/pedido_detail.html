@@ -1,0 +1,85 @@
+{% extends 'core/base.html' %}
+{% block titulo %}{% if pedido.folio %}Pedido {{ pedido.folio }}{% else %}Borrador #{{ pedido.pk }}{% endif %} — Esencias Gama{% endblock %}
+{% block content %}
+<div class="encabezado-lista">
+    <h1>{% if pedido.folio %}Pedido {{ pedido.folio }}{% else %}Borrador #{{ pedido.pk }}{% endif %}</h1>
+    <div class="acciones">
+        {% if pedido.emitido %}
+        <span class="etiqueta etiqueta-emitido">Emitido</span>
+        {% elif pedido.num_resultados > 0 %}
+        <span class="etiqueta etiqueta-resultados">Con resultados</span>
+        {% else %}
+        <span class="etiqueta etiqueta-borrador">Borrador</span>
+        {% endif %}
+
+        {% if not pedido.emitido %}
+        <a class="boton" href="{% url 'pedido_edit' pedido.pk %}">Editar</a>
+        <a class="boton" href="{% url 'pedido_resultados' pedido.pk %}">Capturar resultados</a>
+        <form method="post" action="{% url 'pedido_emitir' pedido.pk %}" class="form-inline"
+              onsubmit="return confirm('¿Emitir el certificado de este pedido? Esta acción no se puede deshacer.');">
+            {% csrf_token %}
+            <button type="submit" class="boton">Emitir certificado</button>
+        </form>
+        {% else %}
+        <a class="boton" href="{% url 'pedido_resultados' pedido.pk %}">Ver resultados</a>
+        {% endif %}
+    </div>
+</div>
+
+<dl class="detalle-encabezado">
+    <dt>Cliente</dt>
+    <dd>{{ pedido.cliente.codigo }} — {{ pedido.cliente.razon_social|default:pedido.cliente.nombre_corto }}</dd>
+    <dt>Fecha</dt>
+    <dd>{{ pedido.fecha|date:'d/m/Y' }}</dd>
+    <dt>Creado por</dt>
+    <dd>{{ pedido.usuario_creador.username }}</dd>
+    {% if pedido.emitido %}
+    <dt>Fecha de emisión</dt>
+    <dd>{{ pedido.fecha_emision|date:'d/m/Y H:i' }}</dd>
+    {% endif %}
+</dl>
+
+<h2>Renglones</h2>
+<table class="tabla">
+    <thead>
+        <tr>
+            <th>Producto</th>
+            <th>Unidad</th>
+            <th>CAS</th>
+            <th>ONU</th>
+            <th>Cantidad</th>
+            <th>Barriles</th>
+            <th>Paquetes</th>
+            <th>Lote</th>
+            <th>Salida</th>
+            <th>Peso bruto</th>
+            <th>Peso tara</th>
+            <th>Peso neto</th>
+            <th>Caducidad</th>
+            <th>Producción</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for renglon in renglones %}
+        <tr>
+            <td>{{ renglon.producto.modelo }} — {{ renglon.producto.descripcion }}</td>
+            <td>{{ renglon.unidad }}</td>
+            <td>{{ renglon.cas }}</td>
+            <td>{{ renglon.onu }}</td>
+            <td>{{ renglon.cantidad }}</td>
+            <td>{{ renglon.barriles }}</td>
+            <td>{{ renglon.paquetes }}</td>
+            <td>{{ renglon.lote }}</td>
+            <td>{{ renglon.salida }}</td>
+            <td>{{ renglon.peso_bruto|default_if_none:'' }}</td>
+            <td>{{ renglon.peso_tara|default_if_none:'' }}</td>
+            <td>{{ renglon.peso_neto|default_if_none:'' }}</td>
+            <td>{{ renglon.caducidad }}</td>
+            <td>{{ renglon.produccion }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="14">Este pedido no tiene renglones.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

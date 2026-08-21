@@ -1,0 +1,38 @@
+{% load static %}<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>{% block titulo %}Esencias Gama{% endblock %}</title>
+<link rel="stylesheet" href="{% static 'core/estilos.css' %}">
+</head>
+<body>
+{% if user.is_authenticated %}
+<header class="barra">
+    <a class="marca" href="{% url 'pedido_list' %}">Esencias Gama</a>
+    <nav>
+        <a href="{% url 'pedido_list' %}">Pedidos</a>
+        {% if user.is_staff %}<a href="{% url 'admin:index' %}">Catálogos</a>{% endif %}
+    </nav>
+    <div class="usuario">
+        {{ user.username }}
+        <form method="post" action="{% url 'logout' %}" class="form-inline">
+            {% csrf_token %}
+            <button type="submit" class="enlace">Salir</button>
+        </form>
+    </div>
+</header>
+{% endif %}
+
+<main class="contenido">
+    {% if messages %}
+    <ul class="mensajes">
+        {% for message in messages %}
+        <li class="mensaje mensaje-{{ message.tags }}">{{ message }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% block content %}{% endblock %}
+</main>
+</body>
+</html>

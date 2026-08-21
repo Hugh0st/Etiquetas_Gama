@@ -1,0 +1,56 @@
+{% extends 'core/base.html' %}
+{% block titulo %}Resultados — {% if pedido.folio %}Pedido {{ pedido.folio }}{% else %}Borrador #{{ pedido.pk }}{% endif %} — Esencias Gama{% endblock %}
+{% block content %}
+<div class="encabezado-lista">
+    <h1>Resultados de laboratorio — {% if pedido.folio %}Pedido {{ pedido.folio }}{% else %}Borrador #{{ pedido.pk }}{% endif %}</h1>
+    <a class="boton" href="{% url 'pedido_detail' pedido.pk %}">Volver al pedido</a>
+</div>
+
+<p>Cliente: {{ pedido.cliente.codigo }} — {{ pedido.cliente.razon_social|default:pedido.cliente.nombre_corto }}</p>
+
+{% if solo_lectura %}
+<p class="aviso">Este pedido ya fue emitido; los resultados se muestran de solo lectura.</p>
+{% endif %}
+
+<form method="post">
+    {% csrf_token %}
+    {% for renglon in renglones %}
+    <div class="bloque-renglon">
+        <h2>{{ renglon.producto.modelo }} — {{ renglon.producto.descripcion }}</h2>
+
+        {% if renglon.filas_resultado %}
+        <table class="tabla tabla-resultados">
+            <thead>
+                <tr>
+                    <th>Especificación</th>
+                    <th>Resultado</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for fila in renglon.filas_resultado %}
+                <tr>
+                    <td class="especificacion">{{ fila.linea.texto }}</td>
+                    <td>
+                        {% if solo_lectura %}
+                        {{ fila.texto }}
+                        {% else %}
+                        <input type="text" name="resultado-{{ renglon.id }}-{{ fila.linea.orden }}" value="{{ fila.texto }}">
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="aviso">Este producto no tiene especificación registrada.</p>
+        {% endif %}
+    </div>
+    {% endfor %}
+
+    {% if not solo_lectura %}
+    <div class="acciones">
+        <button type="submit" class="boton">Guardar resultados</button>
+    </div>
+    {% endif %}
+</form>
+{% endblock %}
