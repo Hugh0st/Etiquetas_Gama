@@ -130,5 +130,8 @@ a { color: #0056b3; }
 .bloque-renglon h2 { font-size: 15px; margin-top: 0; }
 .tabla-resultados td.especificacion { font-family: 'Courier New', monospace; white-space: pre; }
 .tabla-resultados td input[type="text"] { width: 100%; padding: 6px; font-size: 14px; border: 1px solid #bbb; border-radius: 3px; }
+.tabla-resultados tr.fila-continuacion td.especificacion { color: #777; border-top: none; }
+.tabla-resultados tr.fila-continuacion td { border-top: none; }
+.tabla-resultados .sin-captura { color: #aaa; }
 
 input:focus, select:focus, button:focus { outline: 2px solid #0056b3; outline-offset: 1px; }

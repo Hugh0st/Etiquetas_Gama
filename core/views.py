@@ -137,6 +137,8 @@ def pedido_resultados(request, pk):
         with transaction.atomic():
             for renglon in renglones:
                 for linea in renglon.producto.especificacion.all():
+                    if linea.es_continuacion:
+                        continue
                     campo = f'resultado-{renglon.id}-{linea.orden}'
                     texto = request.POST.get(campo, '').strip()
                     ResultadoLaboratorio.objects.update_or_create(

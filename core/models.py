@@ -76,6 +76,10 @@ class LineaEspecificacion(models.Model):
     producto = models.ForeignKey(Producto, on_delete=models.CASCADE, related_name='especificacion')
     orden = models.IntegerField()
     texto = models.CharField(max_length=500)
+    es_continuacion = models.BooleanField(
+        default=False,
+        help_text='Es continuación visual de la línea anterior (no lleva su propio resultado).',
+    )
 
     class Meta:
         ordering = ['producto', 'orden']

@@ -28,10 +28,12 @@
             </thead>
             <tbody>
                 {% for fila in renglon.filas_resultado %}
-                <tr>
+                <tr class="{% if fila.linea.es_continuacion %}fila-continuacion{% endif %}">
                     <td class="especificacion">{{ fila.linea.texto }}</td>
                     <td>
-                        {% if solo_lectura %}
+                        {% if fila.linea.es_continuacion %}
+                        <span class="sin-captura" title="Continuación de la línea de arriba, no lleva resultado propio">—</span>
+                        {% elif solo_lectura %}
                         {{ fila.texto }}
                         {% else %}
                         <input type="text" name="resultado-{{ renglon.id }}-{{ fila.linea.orden }}" value="{{ fila.texto }}">

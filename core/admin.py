@@ -14,6 +14,7 @@ class LineaEspecificacionInline(admin.TabularInline):
     model = LineaEspecificacion
     extra = 0
     ordering = ('orden',)
+    fields = ('orden', 'texto', 'es_continuacion')
 
 
 @admin.register(Producto)
