@@ -12,6 +12,8 @@
         <span class="etiqueta etiqueta-borrador">Borrador</span>
         {% endif %}
 
+        <a class="boton" href="{% url 'pedido_etiquetas' pedido.pk %}">Imprimir etiquetas</a>
+
         {% if not pedido.emitido %}
         <a class="boton" href="{% url 'pedido_edit' pedido.pk %}">Editar</a>
         <a class="boton" href="{% url 'pedido_resultados' pedido.pk %}">Capturar resultados</a>
@@ -48,7 +50,6 @@
             <th>CAS</th>
             <th>ONU</th>
             <th>Cantidad</th>
-            <th>Barriles</th>
             <th>Paquetes</th>
             <th>Lote</th>
             <th>Salida</th>
@@ -67,7 +68,6 @@
             <td>{{ renglon.cas }}</td>
             <td>{{ renglon.onu }}</td>
             <td>{{ renglon.cantidad }}</td>
-            <td>{{ renglon.barriles }}</td>
             <td>{{ renglon.paquetes }}</td>
             <td>{{ renglon.lote }}</td>
             <td>{{ renglon.salida }}</td>
@@ -78,7 +78,7 @@
             <td>{{ renglon.produccion }}</td>
         </tr>
         {% empty %}
-        <tr><td colspan="14">Este pedido no tiene renglones.</td></tr>
+        <tr><td colspan="13">Este pedido no tiene renglones.</td></tr>
         {% endfor %}
     </tbody>
 </table>

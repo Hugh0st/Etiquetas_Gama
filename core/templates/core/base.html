@@ -11,7 +11,10 @@
     <a class="marca" href="{% url 'pedido_list' %}">Esencias Gama</a>
     <nav>
         <a href="{% url 'pedido_list' %}">Pedidos</a>
-        {% if user.is_staff %}<a href="{% url 'admin:index' %}">Catálogos</a>{% endif %}
+        {% if user.is_staff %}
+        <a href="{% url 'admin:index' %}">Catálogos</a>
+        <a href="{% url 'calibracion' %}">Calibración</a>
+        {% endif %}
     </nav>
     <div class="usuario">
         {{ user.username }}

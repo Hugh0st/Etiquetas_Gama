@@ -1,0 +1,44 @@
+{% extends 'core/base.html' %}
+{% block titulo %}Calibración de impresión — Esencias Gama{% endblock %}
+{% block content %}
+<h1>Calibración de impresión</h1>
+
+<p>
+    Estos valores controlan dónde caen los datos sobreimpresos en la hoja de etiquetas
+    preimpresa. Ajusta un valor, guarda, imprime la hoja de prueba sobre el papel real
+    (al 100% de escala) y compara. Repite hasta que todo caiga en su recuadro.
+</p>
+
+{% if form.non_field_errors %}
+<ul class="errores">
+    {% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
+</ul>
+{% endif %}
+
+<form method="post" class="form-calibracion">
+    {% csrf_token %}
+
+    {% for field in form %}
+    <div class="campo campo-calibracion">
+        <label for="{{ field.id_for_label }}">{{ field.label }} (mm)</label>
+        {{ field }}
+        {% if field.help_text %}<p class="ayuda-campo">{{ field.help_text }}</p>{% endif %}
+        {{ field.errors }}
+    </div>
+    {% endfor %}
+
+    <div class="acciones">
+        <button type="submit" name="accion" value="guardar" class="boton">Guardar</button>
+        <button type="submit" name="accion" value="probar" formtarget="_blank" class="boton">
+            Imprimir hoja de prueba
+        </button>
+    </div>
+</form>
+
+<p class="aviso aviso-fuerte">
+    La hoja de prueba también debe imprimirse al 100% de escala. Trae las 3 etiquetas de
+    una hoja: la primera con datos normales, la segunda con valores largos (para revisar
+    que la fuente se encoja en vez de partirse en dos líneas), y la tercera con la regla
+    "|123456789" en los 11 campos para medir el desfase con precisión.
+</p>
+{% endblock %}

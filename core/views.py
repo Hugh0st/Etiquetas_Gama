@@ -2,14 +2,20 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.db.models import Count, Q
-from django.http import JsonResponse
+from django.http import FileResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
-from .forms import PedidoForm, RenglonPedidoFormSet
-from .models import Cliente, Pedido, PedidoSinResultados, Producto, ResultadoLaboratorio
+from .etiquetas import generar_pdf_calibracion, generar_pdf_etiquetas
+from .forms import ConfiguracionForm, PedidoForm, RenglonPedidoFormSet
+from .models import Cliente, Configuracion, Pedido, PedidoSinResultados, Producto, ResultadoLaboratorio
 
 LIMITE_BUSQUEDA = 20
+POSICIONES_VALIDAS = {1, 2, 3}
+
+
+def es_admin(user):
+    return user.is_superuser or user.groups.filter(name='admin').exists()
 
 
 def _pedidos_con_conteos(queryset):
@@ -170,6 +176,63 @@ def pedido_emitir(request, pk):
 
     messages.success(request, f'Certificado emitido con folio {pedido.folio}.')
     return redirect('pedido_detail', pk=pedido.pk)
+
+
+@login_required
+def pedido_etiquetas(request, pk):
+    pedido = get_object_or_404(Pedido.objects.select_related('cliente'), pk=pk)
+    renglones = pedido.renglones.select_related('producto')
+    total_etiquetas = sum(r.paquetes for r in renglones)
+    return render(request, 'core/pedido_etiquetas.html', {
+        'pedido': pedido,
+        'renglones': renglones,
+        'total_etiquetas': total_etiquetas,
+    })
+
+
+@login_required
+def pedido_etiquetas_pdf(request, pk):
+    pedido = get_object_or_404(Pedido.objects.select_related('cliente'), pk=pk)
+
+    try:
+        posicion = int(request.GET.get('posicion', 1))
+    except ValueError:
+        posicion = 1
+    if posicion not in POSICIONES_VALIDAS:
+        posicion = 1
+
+    config = Configuracion.obtener()
+    buffer = generar_pdf_etiquetas(pedido, posicion, config)
+
+    nombre = f'etiquetas-{pedido.folio}.pdf' if pedido.folio else f'etiquetas-pedido-{pedido.pk}.pdf'
+    return FileResponse(buffer, content_type='application/pdf', filename=nombre)
+
+
+@login_required
+def calibracion(request):
+    if not es_admin(request.user):
+        messages.error(request, 'Esta pantalla es solo para administradores.')
+        return redirect('pedido_list')
+
+    config = Configuracion.obtener()
+
+    if request.method == 'POST':
+        form = ConfiguracionForm(request.POST, instance=config)
+        accion = request.POST.get('accion')
+
+        if form.is_valid():
+            if accion == 'probar':
+                config_prueba = form.save(commit=False)
+                buffer = generar_pdf_calibracion(config_prueba)
+                return FileResponse(buffer, content_type='application/pdf', filename='hoja-prueba-calibracion.pdf')
+            else:
+                form.save()
+                messages.success(request, 'Configuración guardada.')
+                return redirect('calibracion')
+    else:
+        form = ConfiguracionForm(instance=config)
+
+    return render(request, 'core/calibracion.html', {'form': form})
 
 
 @login_required

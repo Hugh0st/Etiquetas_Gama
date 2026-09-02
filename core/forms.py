@@ -3,7 +3,7 @@ from datetime import date
 from django import forms
 from django.forms import BaseInlineFormSet, inlineformset_factory
 
-from .models import Cliente, Pedido, Producto, RenglonPedido
+from .models import Cliente, Configuracion, Pedido, Producto, RenglonPedido
 
 MESES = [
     'ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO',
@@ -44,7 +44,7 @@ class RenglonPedidoForm(forms.ModelForm):
         model = RenglonPedido
         fields = [
             'producto', 'cantidad', 'unidad', 'cas', 'onu',
-            'barriles', 'paquetes', 'lote', 'salida',
+            'paquetes', 'lote', 'salida',
             'peso_bruto', 'peso_tara', 'caducidad', 'produccion',
         ]
         labels = {
@@ -56,8 +56,7 @@ class RenglonPedidoForm(forms.ModelForm):
             'cantidad': forms.NumberInput(attrs={'step': '0.001'}),
             'peso_bruto': forms.NumberInput(attrs={'step': '0.001'}),
             'peso_tara': forms.NumberInput(attrs={'step': '0.001'}),
-            'barriles': forms.NumberInput(attrs={'min': '0'}),
-            'paquetes': forms.NumberInput(attrs={'min': '0'}),
+            'paquetes': forms.NumberInput(attrs={'min': '1'}),
             'caducidad': forms.HiddenInput(),
             'produccion': forms.HiddenInput(),
         }
@@ -112,10 +111,9 @@ class RenglonPedidoForm(forms.ModelForm):
         cleaned['caducidad'] = self._combinar_mes_anio('caducidad', cleaned)
         cleaned['produccion'] = self._combinar_mes_anio('produccion', cleaned)
 
-        barriles = cleaned.get('barriles') or 0
         paquetes = cleaned.get('paquetes') or 0
-        if barriles == 0 and paquetes == 0:
-            self.add_error(None, 'Barriles y paquetes no pueden ser ambos cero.')
+        if paquetes < 1:
+            self.add_error('paquetes', 'Paquetes debe ser al menos 1.')
 
         peso_bruto = cleaned.get('peso_bruto')
         peso_tara = cleaned.get('peso_tara')
@@ -153,3 +151,29 @@ RenglonPedidoFormSet = inlineformset_factory(
     extra=1,
     can_delete=True,
 )
+
+
+class ConfiguracionForm(forms.ModelForm):
+    class Meta:
+        model = Configuracion
+        fields = ['calib_x', 'calib_y', 'calib_interlineado', 'calib_paso', 'offset_x', 'offset_y']
+        labels = {
+            'calib_x': 'X',
+            'calib_y': 'Y',
+            'calib_interlineado': 'Interlineado',
+            'calib_paso': 'Paso',
+            'offset_x': 'Offset X',
+            'offset_y': 'Offset Y',
+        }
+        help_texts = {
+            'calib_x': 'Posición horizontal (mm desde el borde izquierdo de la hoja) donde empieza a escribirse cada valor.',
+            'calib_y': 'Posición vertical (mm desde el borde superior de la hoja) de la primera línea (VENDIDO A) de la primera etiqueta.',
+            'calib_interlineado': 'Separación vertical (mm) entre renglones consecutivos de la rejilla de una misma etiqueta.',
+            'calib_paso': 'Distancia vertical (mm) de una etiqueta a la siguiente en la misma hoja.',
+            'offset_x': 'Ajuste fino horizontal (mm) que se suma a X. Úsalo para corregir un desfase parejo en todas las líneas.',
+            'offset_y': 'Ajuste fino vertical (mm) que se suma a Y. Úsalo para corregir un desfase parejo en todas las etiquetas.',
+        }
+        widgets = {
+            campo: forms.NumberInput(attrs={'step': '0.1'})
+            for campo in ['calib_x', 'calib_y', 'calib_interlineado', 'calib_paso', 'offset_x', 'offset_y']
+        }

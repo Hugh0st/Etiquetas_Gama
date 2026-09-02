@@ -1,0 +1,53 @@
+{% extends 'core/base.html' %}
+{% block titulo %}Etiquetas — {% if pedido.folio %}Pedido {{ pedido.folio }}{% else %}Borrador #{{ pedido.pk }}{% endif %} — Esencias Gama{% endblock %}
+{% block content %}
+<div class="encabezado-lista">
+    <h1>Imprimir etiquetas — {% if pedido.folio %}Pedido {{ pedido.folio }}{% else %}Borrador #{{ pedido.pk }}{% endif %}</h1>
+    <a class="boton" href="{% url 'pedido_detail' pedido.pk %}">Volver al pedido</a>
+</div>
+
+<p>Cliente: {{ pedido.cliente.codigo }} — {{ pedido.cliente.razon_social|default:pedido.cliente.nombre_corto }}</p>
+
+<p class="aviso aviso-fuerte">
+    Imprime este PDF al <strong>100% de escala</strong>, sin usar la opción "ajustar a página"
+    ni "encoger para que quepa". El papel ya viene con el diseño impreso; si el PDF se
+    escala, los valores no van a caer en los recuadros correctos.
+</p>
+
+<table class="tabla">
+    <thead>
+        <tr>
+            <th>Producto</th>
+            <th>Lote</th>
+            <th>Paquetes (= etiquetas)</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for renglon in renglones %}
+        <tr>
+            <td>{{ renglon.producto.modelo }} — {{ renglon.producto.descripcion }}</td>
+            <td>{{ renglon.lote }}</td>
+            <td>{{ renglon.paquetes }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    <tfoot>
+        <tr>
+            <th colspan="2">Total de etiquetas</th>
+            <th>{{ total_etiquetas }}</th>
+        </tr>
+    </tfoot>
+</table>
+
+<form method="get" action="{% url 'pedido_etiquetas_pdf' pedido.pk %}" target="_blank" class="form-etiquetas">
+    <div class="campo">
+        <label for="id_posicion">Empezar a imprimir en la posición</label>
+        <select name="posicion" id="id_posicion">
+            <option value="1" selected>1 (primera de la hoja)</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+        </select>
+    </div>
+    <button type="submit" class="boton">Generar PDF</button>
+</form>
+{% endblock %}

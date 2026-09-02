@@ -165,7 +165,6 @@ class RenglonPedido(models.Model):
     unidad = models.CharField(max_length=20, blank=True)
     cas = models.CharField(max_length=50, blank=True)
     onu = models.CharField(max_length=50, blank=True)
-    barriles = models.IntegerField(default=0)
     paquetes = models.IntegerField(default=0)
     lote = models.CharField(max_length=100, blank=True)
     salida = models.CharField(max_length=100, blank=True)

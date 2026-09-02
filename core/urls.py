@@ -12,6 +12,9 @@ urlpatterns = [
     path('pedidos/<int:pk>/editar/', views.pedido_edit, name='pedido_edit'),
     path('pedidos/<int:pk>/resultados/', views.pedido_resultados, name='pedido_resultados'),
     path('pedidos/<int:pk>/emitir/', views.pedido_emitir, name='pedido_emitir'),
+    path('pedidos/<int:pk>/etiquetas/', views.pedido_etiquetas, name='pedido_etiquetas'),
+    path('pedidos/<int:pk>/etiquetas/pdf/', views.pedido_etiquetas_pdf, name='pedido_etiquetas_pdf'),
+    path('calibracion/', views.calibracion, name='calibracion'),
     path('api/clientes/', views.api_clientes_buscar, name='api_clientes_buscar'),
     path('api/productos/', views.api_productos_buscar, name='api_productos_buscar'),
 ]

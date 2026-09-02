@@ -40,12 +40,9 @@
         {{ form.cantidad.errors }}
     </div>
     <div class="campo">
-        <label for="{{ form.barriles.id_for_label }}">{{ form.barriles.label }}</label>
-        {{ form.barriles }}
-    </div>
-    <div class="campo">
         <label for="{{ form.paquetes.id_for_label }}">{{ form.paquetes.label }}</label>
         {{ form.paquetes }}
+        {{ form.paquetes.errors }}
     </div>
     <div class="campo">
         <label for="{{ form.lote.id_for_label }}">{{ form.lote.label }}</label>
