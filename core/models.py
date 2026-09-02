@@ -73,12 +73,26 @@ class Producto(models.Model):
 
 
 class LineaEspecificacion(models.Model):
+    TIPO_CONTINUACION_PARAMETROS = 'parametros'
+    TIPO_CONTINUACION_ESPECIFICACION = 'especificacion'
+    TIPO_CONTINUACION_CHOICES = [
+        (TIPO_CONTINUACION_PARAMETROS, 'Parámetros (continúa el nombre, ej. "A 25 C:")'),
+        (TIPO_CONTINUACION_ESPECIFICACION, 'Especificación (continúa el valor, ej. "ALCANFORADO")'),
+    ]
+
     producto = models.ForeignKey(Producto, on_delete=models.CASCADE, related_name='especificacion')
     orden = models.IntegerField()
     texto = models.CharField(max_length=500)
     es_continuacion = models.BooleanField(
         default=False,
         help_text='Es continuación visual de la línea anterior (no lleva su propio resultado).',
+    )
+    tipo_continuacion = models.CharField(
+        max_length=14,
+        choices=TIPO_CONTINUACION_CHOICES,
+        default=TIPO_CONTINUACION_PARAMETROS,
+        blank=True,
+        help_text='Solo aplica si es_continuacion está activo: en qué columna del certificado se imprime.',
     )
 
     class Meta:
@@ -151,7 +165,12 @@ class Pedido(models.Model):
 
                     for renglon in self.renglones.select_related('producto'):
                         renglon.especificacion_snapshot = [
-                            {'orden': linea.orden, 'texto': linea.texto}
+                            {
+                                'orden': linea.orden,
+                                'texto': linea.texto,
+                                'es_continuacion': linea.es_continuacion,
+                                'tipo_continuacion': linea.tipo_continuacion,
+                            }
                             for linea in renglon.producto.especificacion.all()
                         ]
                         renglon.save(update_fields=['especificacion_snapshot'])

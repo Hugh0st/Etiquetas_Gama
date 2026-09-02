@@ -6,6 +6,7 @@ from django.http import FileResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
+from .certificado import generar_pdf_certificado_renglon, generar_pdf_certificados_pedido
 from .etiquetas import generar_pdf_calibracion, generar_pdf_etiquetas
 from .forms import ConfiguracionForm, PedidoForm, RenglonPedidoFormSet
 from .models import Cliente, Configuracion, Pedido, PedidoSinResultados, Producto, ResultadoLaboratorio
@@ -178,6 +179,34 @@ def pedido_emitir(request, pk):
 
     messages.success(request, f'Certificado emitido con folio {pedido.folio}.')
     return redirect('pedido_detail', pk=pedido.pk)
+
+
+@login_required
+def renglon_certificado_pdf(request, pedido_pk, renglon_pk):
+    pedido = get_object_or_404(Pedido.objects.select_related('cliente'), pk=pedido_pk)
+    if not pedido.emitido:
+        messages.error(request, 'El pedido debe estar emitido para descargar el certificado.')
+        return redirect('pedido_detail', pk=pedido.pk)
+
+    renglon = get_object_or_404(
+        pedido.renglones.select_related('producto').prefetch_related('resultados'),
+        pk=renglon_pk,
+    )
+    buffer = generar_pdf_certificado_renglon(pedido, renglon)
+    nombre = f'certificado-{pedido.folio}-{renglon.producto_id}.pdf'
+    return FileResponse(buffer, content_type='application/pdf', filename=nombre)
+
+
+@login_required
+def pedido_certificados_pdf(request, pk):
+    pedido = get_object_or_404(Pedido.objects.select_related('cliente'), pk=pk)
+    if not pedido.emitido:
+        messages.error(request, 'El pedido debe estar emitido para descargar los certificados.')
+        return redirect('pedido_detail', pk=pedido.pk)
+
+    buffer = generar_pdf_certificados_pedido(pedido)
+    nombre = f'certificados-{pedido.folio}.pdf'
+    return FileResponse(buffer, content_type='application/pdf', filename=nombre)
 
 
 @login_required
