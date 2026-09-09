@@ -3,54 +3,140 @@
 {% block content %}
 <div class="encabezado-lista">
     <h1>Pedidos</h1>
-    <a class="boton" href="{% url 'pedido_create' %}">Nuevo pedido</a>
+    <a class="boton" href="{% url 'pedido_create' %}">+ Nuevo pedido</a>
 </div>
 
-<form method="get" class="filtros">
-    <input type="text" name="q" value="{{ q }}" placeholder="Folio o cliente" autofocus>
-    <select name="estado">
-        <option value="" {% if estado == '' %}selected{% endif %}>Todos los estados</option>
-        <option value="borrador" {% if estado == 'borrador' %}selected{% endif %}>Borrador</option>
-        <option value="con_resultados" {% if estado == 'con_resultados' %}selected{% endif %}>Con resultados</option>
-        <option value="emitido" {% if estado == 'emitido' %}selected{% endif %}>Emitido</option>
-    </select>
-    <button type="submit">Buscar</button>
-</form>
+<div class="tarjeta tarjeta-pedidos">
 
-<table class="tabla">
-    <thead>
-        <tr>
-            <th>Folio</th>
-            <th>Cliente</th>
-            <th>Fecha</th>
-            <th>Renglones</th>
-            <th>Estado</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for pedido in pedidos %}
-        <tr>
-            <td>
-                <a href="{% url 'pedido_detail' pedido.pk %}">
-                    {% if pedido.folio %}{{ pedido.folio }}{% else %}Borrador #{{ pedido.pk }}{% endif %}
-                </a>
-            </td>
-            <td>{{ pedido.cliente.codigo }} — {{ pedido.cliente.razon_social|default:pedido.cliente.nombre_corto }}</td>
-            <td>{{ pedido.fecha|date:'d/m/Y' }}</td>
-            <td>{{ pedido.num_renglones }}</td>
-            <td>
-                {% if pedido.emitido %}
-                <span class="etiqueta etiqueta-emitido">Emitido</span>
-                {% elif pedido.num_resultados > 0 %}
-                <span class="etiqueta etiqueta-resultados">Con resultados</span>
-                {% else %}
-                <span class="etiqueta etiqueta-borrador">Borrador</span>
-                {% endif %}
-            </td>
-        </tr>
-        {% empty %}
-        <tr><td colspan="5">No hay pedidos que coincidan con la búsqueda.</td></tr>
-        {% endfor %}
-    </tbody>
-</table>
+    <div class="barra-herramientas">
+        <form method="get" class="buscador">
+            <input type="hidden" name="estado" value="{{ estado }}">
+            <div class="campo-buscar">
+                <svg class="lupa" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+                    <circle cx="7" cy="7" r="4.5"></circle>
+                    <line x1="10.4" y1="10.4" x2="14.5" y2="14.5" stroke-linecap="round"></line>
+                </svg>
+                <input type="search" name="q" value="{{ q }}" aria-label="Buscar pedidos por cliente o folio"
+                       placeholder="Buscar por cliente o folio…" autofocus>
+            </div>
+            <button type="submit" class="boton-secundario">Buscar</button>
+            {% if q or estado %}
+            <a class="enlace-limpiar" href="{% url 'pedido_list' %}">Limpiar</a>
+            {% endif %}
+        </form>
+
+        <div class="chips">
+            <a class="chip {% if not estado %}chip-activo{% endif %}"
+               href="?q={{ q|urlencode }}">
+                Todos <span class="chip-conteo">{{ conteos.todos }}</span>
+            </a>
+            <a class="chip {% if estado == 'borrador' %}chip-activo{% endif %}"
+               href="?estado=borrador&amp;q={{ q|urlencode }}">
+                <span class="chip-punto chip-punto-borrador"></span>
+                Borrador <span class="chip-conteo">{{ conteos.borrador }}</span>
+            </a>
+            <a class="chip {% if estado == 'con_resultados' %}chip-activo{% endif %}"
+               href="?estado=con_resultados&amp;q={{ q|urlencode }}">
+                <span class="chip-punto chip-punto-resultados"></span>
+                Con resultados <span class="chip-conteo">{{ conteos.con_resultados }}</span>
+            </a>
+            <a class="chip {% if estado == 'emitido' %}chip-activo{% endif %}"
+               href="?estado=emitido&amp;q={{ q|urlencode }}">
+                <span class="chip-punto chip-punto-emitido"></span>
+                Emitido <span class="chip-conteo">{{ conteos.emitido }}</span>
+            </a>
+            <a class="chip {% if estado == 'cancelado' %}chip-activo{% endif %}"
+               href="?estado=cancelado&amp;q={{ q|urlencode }}">
+                <span class="chip-punto chip-punto-cancelado"></span>
+                Cancelado <span class="chip-conteo">{{ conteos.cancelado }}</span>
+            </a>
+        </div>
+    </div>
+
+    {% if pedidos %}
+    <table class="tabla tabla-pedidos">
+        <thead>
+            <tr>
+                <th class="celda-cliente">Cliente</th>
+                <th>Folio</th>
+                <th>Fecha</th>
+                <th class="col-num">Renglones</th>
+                <th>Estado</th>
+                <th class="col-accion">Acción</th>
+                <th class="col-peligro"><span class="oculto-visual">Eliminar o cancelar</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for pedido in pedidos %}
+            <tr class="{% if pedido.cancelado %}fila-cancelado{% elif pedido.emitido %}fila-emitido{% elif pedido.num_resultados > 0 %}fila-resultados{% else %}fila-borrador{% endif %}">
+                <td class="celda-cliente">
+                    <a class="cliente-nombre" href="{% url 'pedido_detail' pedido.pk %}">
+                        {{ pedido.cliente.razon_social|default:pedido.cliente.nombre_corto }}
+                    </a>
+                    <span class="cliente-codigo">{{ pedido.cliente.codigo }}</span>
+                </td>
+                <td>
+                    {% if pedido.folio %}
+                    <span class="folio">{{ pedido.folio }}</span>
+                    {% else %}
+                    <span class="folio-vacio">Sin folio</span>
+                    <span class="folio-id">#{{ pedido.pk }}</span>
+                    {% endif %}
+                </td>
+                <td class="col-fecha">{{ pedido.fecha|date:'d/m/Y' }}</td>
+                <td class="col-num">{{ pedido.num_renglones }}</td>
+                <td>
+                    {% if pedido.cancelado %}
+                    <span class="etiqueta etiqueta-cancelado">Cancelado</span>
+                    {% elif pedido.emitido %}
+                    <span class="etiqueta etiqueta-emitido">Emitido</span>
+                    {% elif pedido.num_resultados > 0 %}
+                    <span class="etiqueta etiqueta-resultados">Con resultados</span>
+                    {% else %}
+                    <span class="etiqueta etiqueta-borrador">Borrador</span>
+                    {% endif %}
+                </td>
+                <td class="col-accion">
+                    {% if pedido.emitido %}
+                    <a class="boton-fila" href="{% url 'pedido_certificados_pdf' pedido.pk %}">Certificados</a>
+                    {% elif pedido.num_resultados > 0 %}
+                    <a class="boton-fila boton-fila-primario" href="{% url 'pedido_detail' pedido.pk %}">Emitir certificado</a>
+                    {% else %}
+                    <a class="boton-fila" href="{% url 'pedido_resultados' pedido.pk %}">Capturar resultados</a>
+                    {% endif %}
+                </td>
+                <td class="col-peligro">
+                    {% if pedido.se_puede_eliminar %}
+                    <a class="enlace-peligro" href="{% url 'pedido_eliminar' pedido.pk %}"
+                       title="Eliminar este pedido">Eliminar</a>
+                    {% elif es_admin and not pedido.cancelado %}
+                    <a class="enlace-peligro" href="{% url 'pedido_cancelar' pedido.pk %}"
+                       title="Cancelar este pedido emitido">Cancelar</a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% elif q or estado %}
+    <div class="estado-vacio">
+        <h2>Ningún pedido coincide con la búsqueda</h2>
+        <p>
+            {% if q %}No encontramos pedidos para «{{ q }}»{% if estado %} en este estado{% endif %}.
+            {% else %}No hay pedidos en este estado.{% endif %}
+            Prueba con otro texto o quita los filtros.
+        </p>
+        <a class="boton-secundario boton" href="{% url 'pedido_list' %}">Quitar filtros</a>
+    </div>
+
+    {% else %}
+    <div class="estado-vacio">
+        <h2>Todavía no hay pedidos</h2>
+        <p>Aquí van a aparecer los pedidos conforme los levantes. Cada uno arranca como borrador, luego se le capturan los resultados del laboratorio y al final se emite su certificado.</p>
+        <a class="boton" href="{% url 'pedido_create' %}">+ Crear el primer pedido</a>
+    </div>
+    {% endif %}
+
+</div>
 {% endblock %}

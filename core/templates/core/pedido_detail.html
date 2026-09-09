@@ -4,7 +4,9 @@
 <div class="encabezado-lista">
     <h1>{% if pedido.folio %}Pedido {{ pedido.folio }}{% else %}Borrador #{{ pedido.pk }}{% endif %}</h1>
     <div class="acciones">
-        {% if pedido.emitido %}
+        {% if pedido.cancelado %}
+        <span class="etiqueta etiqueta-cancelado">Cancelado</span>
+        {% elif pedido.emitido %}
         <span class="etiqueta etiqueta-emitido">Emitido</span>
         {% elif pedido.num_resultados > 0 %}
         <span class="etiqueta etiqueta-resultados">Con resultados</span>
@@ -18,7 +20,11 @@
         <a class="boton" href="{% url 'pedido_certificados_pdf' pedido.pk %}">Descargar todos los certificados</a>
         {% endif %}
 
-        {% if not pedido.emitido %}
+        {% if pedido.cancelado %}
+        <a class="boton" href="{% url 'pedido_resultados' pedido.pk %}">Ver resultados</a>
+        {% elif pedido.emitido %}
+        <a class="boton" href="{% url 'pedido_resultados' pedido.pk %}">Ver resultados</a>
+        {% else %}
         <a class="boton" href="{% url 'pedido_edit' pedido.pk %}">Editar</a>
         <a class="boton" href="{% url 'pedido_resultados' pedido.pk %}">Capturar resultados</a>
         <form method="post" action="{% url 'pedido_emitir' pedido.pk %}" class="form-inline"
@@ -26,11 +32,24 @@
             {% csrf_token %}
             <button type="submit" class="boton">Emitir certificado</button>
         </form>
-        {% else %}
-        <a class="boton" href="{% url 'pedido_resultados' pedido.pk %}">Ver resultados</a>
         {% endif %}
     </div>
 </div>
+
+{% if pedido.cancelado %}
+<div class="aviso-cancelado">
+    <h2>Este pedido está cancelado</h2>
+    <dl>
+        <dt>Cancelado el</dt>
+        <dd>{{ pedido.fecha_cancelacion|date:'d/m/Y H:i' }}</dd>
+        <dt>Canceló</dt>
+        <dd>{{ pedido.usuario_cancelacion.username|default:'—' }}</dd>
+        <dt>Motivo</dt>
+        <dd>{{ pedido.motivo_cancelacion|linebreaksbr }}</dd>
+    </dl>
+    <p class="nota">Se conserva el registro completo (folio, renglones, resultados y snapshots). Los documentos que ya se habían generado siguen disponibles para consulta.</p>
+</div>
+{% endif %}
 
 <dl class="detalle-encabezado">
     <dt>Cliente</dt>
@@ -90,4 +109,23 @@
         {% endfor %}
     </tbody>
 </table>
+
+{% if pedido.se_puede_eliminar or es_admin and pedido.emitido and not pedido.cancelado %}
+<div class="zona-peligro">
+    <div class="zona-peligro-texto">
+        {% if pedido.se_puede_eliminar %}
+        <h2>Eliminar este pedido</h2>
+        <p>Todavía no tiene folio ni ha salido de la empresa, así que se puede borrar por completo. No se puede deshacer.</p>
+        {% else %}
+        <h2>Cancelar este pedido</h2>
+        <p>Ya fue emitido, así que no se borra: queda marcado como cancelado y conserva su folio y su registro.</p>
+        {% endif %}
+    </div>
+    {% if pedido.se_puede_eliminar %}
+    <a class="boton boton-peligro" href="{% url 'pedido_eliminar' pedido.pk %}">Eliminar pedido</a>
+    {% else %}
+    <a class="boton boton-peligro" href="{% url 'pedido_cancelar' pedido.pk %}">Cancelar pedido</a>
+    {% endif %}
+</div>
+{% endif %}
 {% endblock %}

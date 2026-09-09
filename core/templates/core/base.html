@@ -1,14 +1,17 @@
-{% load static %}<!DOCTYPE html>
+{% load static estaticos %}<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="utf-8">
 <title>{% block titulo %}Esencias Gama{% endblock %}</title>
-<link rel="stylesheet" href="{% static 'core/estilos.css' %}">
+<link rel="stylesheet" href="{% estatico_versionado 'core/estilos.css' %}">
 </head>
 <body>
 {% if user.is_authenticated %}
 <header class="barra">
-    <a class="marca" href="{% url 'pedido_list' %}">Esencias Gama</a>
+    <a class="marca" href="{% url 'pedido_list' %}">
+        <img class="marca-logo" src="{% static 'core/logo_gama.png' %}" alt="">
+        <span>Esencias Gama</span>
+    </a>
     <nav>
         <a href="{% url 'pedido_list' %}">Pedidos</a>
         {% if user.is_staff %}

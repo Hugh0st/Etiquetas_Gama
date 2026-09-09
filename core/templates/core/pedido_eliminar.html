@@ -1,0 +1,32 @@
+{% extends 'core/base.html' %}
+{% block titulo %}Eliminar pedido — Esencias Gama{% endblock %}
+{% block content %}
+<div class="encabezado-lista">
+    <h1>Eliminar pedido</h1>
+    <a class="boton-secundario boton" href="{% url 'pedido_detail' pedido.pk %}">Volver al pedido</a>
+</div>
+
+<div class="tarjeta caja-confirmacion">
+    <div class="confirmacion-cabecera confirmacion-peligro">
+        <h2>¿Eliminar este pedido de forma definitiva?</h2>
+        <p>Esta acción no se puede deshacer. El pedido y todo lo que se le capturó desaparecen de la base de datos.</p>
+    </div>
+
+    <dl class="detalle-encabezado confirmacion-datos">
+        <dt>Cliente</dt>
+        <dd><strong>{{ pedido.cliente.razon_social|default:pedido.cliente.nombre_corto }}</strong> ({{ pedido.cliente.codigo }})</dd>
+        <dt>Folio</dt>
+        <dd>Sin folio — borrador interno #{{ pedido.pk }}</dd>
+        <dt>Fecha</dt>
+        <dd>{{ pedido.fecha|date:'d/m/Y' }}</dd>
+        <dt>Se elimina</dt>
+        <dd>{{ num_renglones }} renglón{{ num_renglones|pluralize:"es" }} y {{ num_resultados }} resultado{{ num_resultados|pluralize }} de laboratorio</dd>
+    </dl>
+
+    <form method="post" class="confirmacion-acciones">
+        {% csrf_token %}
+        <button type="submit" class="boton boton-peligro">Sí, eliminar el pedido</button>
+        <a class="boton-secundario boton" href="{% url 'pedido_detail' pedido.pk %}">No, regresar</a>
+    </form>
+</div>
+{% endblock %}

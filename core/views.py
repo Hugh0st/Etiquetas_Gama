@@ -9,14 +9,20 @@ from django.views.decorators.http import require_POST
 from .certificado import generar_pdf_certificado_renglon, generar_pdf_certificados_pedido
 from .etiquetas import generar_pdf_calibracion, generar_pdf_etiquetas
 from .forms import ConfiguracionForm, PedidoForm, RenglonPedidoFormSet
-from .models import Cliente, Configuracion, Pedido, PedidoSinResultados, Producto, ResultadoLaboratorio
+from .models import (
+    Cliente,
+    Configuracion,
+    MotivoCancelacionRequerido,
+    Pedido,
+    PedidoEmitidoNoSeElimina,
+    PedidoSinResultados,
+    Producto,
+    ResultadoLaboratorio,
+)
+from .permisos import es_admin, solo_admin  # noqa: F401  (es_admin se reexporta por comodidad)
 
 LIMITE_BUSQUEDA = 20
 POSICIONES_VALIDAS = {1, 2, 3}
-
-
-def es_admin(user):
-    return user.is_superuser or user.groups.filter(name='admin').exists()
 
 
 def _pedidos_con_conteos(queryset):
@@ -34,13 +40,26 @@ def _pedidos_con_conteos(queryset):
 def pedido_list(request):
     pedidos = _pedidos_con_conteos(Pedido.objects.select_related('cliente'))
 
+    # Conteos por estado para los filtros. Son solo para mostrar: siempre
+    # cuentan sobre el total, sin importar el filtro activo.
+    base_conteos = _pedidos_con_conteos(Pedido.objects.all())
+    conteos = {
+        'todos': Pedido.objects.count(),
+        'borrador': base_conteos.filter(emitido=False, num_resultados=0).count(),
+        'con_resultados': base_conteos.filter(emitido=False, num_resultados__gt=0).count(),
+        'emitido': Pedido.objects.filter(emitido=True, cancelado=False).count(),
+        'cancelado': Pedido.objects.filter(cancelado=True).count(),
+    }
+
     estado = request.GET.get('estado', '')
     if estado == 'borrador':
         pedidos = pedidos.filter(emitido=False, num_resultados=0)
     elif estado == 'con_resultados':
         pedidos = pedidos.filter(emitido=False, num_resultados__gt=0)
     elif estado == 'emitido':
-        pedidos = pedidos.filter(emitido=True)
+        pedidos = pedidos.filter(emitido=True, cancelado=False)
+    elif estado == 'cancelado':
+        pedidos = pedidos.filter(cancelado=True)
 
     q = request.GET.get('q', '').strip()
     if q:
@@ -54,6 +73,7 @@ def pedido_list(request):
         'pedidos': pedidos,
         'estado': estado,
         'q': q,
+        'conteos': conteos,
     })
 
 
@@ -85,6 +105,9 @@ def pedido_create(request):
 @login_required
 def pedido_edit(request, pk):
     pedido = get_object_or_404(Pedido, pk=pk)
+    if pedido.cancelado:
+        messages.info(request, 'Este pedido está cancelado y no se puede editar.')
+        return redirect('pedido_detail', pk=pedido.pk)
     if pedido.emitido:
         messages.info(request, 'Este pedido ya fue emitido y no se puede editar.')
         return redirect('pedido_detail', pk=pedido.pk)
@@ -131,6 +154,9 @@ def pedido_resultados(request, pk):
     )
 
     if request.method == 'POST':
+        if pedido.cancelado:
+            messages.info(request, 'Este pedido está cancelado; los resultados no se pueden modificar.')
+            return redirect('pedido_detail', pk=pedido.pk)
         if pedido.emitido:
             messages.info(request, 'Este pedido ya fue emitido; los resultados no se pueden modificar.')
             return redirect('pedido_detail', pk=pedido.pk)
@@ -167,6 +193,9 @@ def pedido_resultados(request, pk):
 @require_POST
 def pedido_emitir(request, pk):
     pedido = get_object_or_404(Pedido, pk=pk)
+    if pedido.cancelado:
+        messages.info(request, 'Este pedido está cancelado y no se puede volver a emitir.')
+        return redirect('pedido_detail', pk=pedido.pk)
     if pedido.emitido:
         messages.info(request, 'Este pedido ya estaba emitido.')
         return redirect('pedido_detail', pk=pedido.pk)
@@ -179,6 +208,80 @@ def pedido_emitir(request, pk):
 
     messages.success(request, f'Certificado emitido con folio {pedido.folio}.')
     return redirect('pedido_detail', pk=pedido.pk)
+
+
+@login_required
+def pedido_eliminar(request, pk):
+    """Borra de la base un pedido que nunca se emitió (borrador o con resultados).
+
+    Cualquier usuario puede hacerlo. Un pedido con folio no llega aquí: se
+    rechaza en la vista, y además el modelo lo bloquea por si acaso.
+    """
+    pedido = get_object_or_404(Pedido.objects.select_related('cliente'), pk=pk)
+
+    if not pedido.se_puede_eliminar:
+        messages.error(
+            request,
+            f'El pedido {pedido.folio} ya fue emitido y no se puede eliminar. '
+            f'Si hay que anularlo, se cancela.',
+        )
+        return redirect('pedido_detail', pk=pedido.pk)
+
+    if request.method == 'POST':
+        descripcion = f'{pedido.cliente.razon_social or pedido.cliente.nombre_corto}'
+        try:
+            pedido.delete()
+        except PedidoEmitidoNoSeElimina:
+            messages.error(request, 'El pedido ya fue emitido y no se puede eliminar.')
+            return redirect('pedido_detail', pk=pedido.pk)
+        messages.success(request, f'Se eliminó el pedido de {descripcion}.')
+        return redirect('pedido_list')
+
+    return render(request, 'core/pedido_eliminar.html', {
+        'pedido': pedido,
+        'num_renglones': pedido.renglones.count(),
+        'num_resultados': ResultadoLaboratorio.objects.filter(renglon__pedido=pedido).count(),
+    })
+
+
+@login_required
+@solo_admin
+def pedido_cancelar(request, pk):
+    """Anula un pedido emitido conservando folio, renglones y snapshots."""
+    pedido = get_object_or_404(Pedido.objects.select_related('cliente'), pk=pk)
+
+    if not pedido.emitido:
+        messages.error(
+            request,
+            'Este pedido todavía no se emite, así que no hay nada que cancelar. '
+            'Si ya no lo necesitas, puedes eliminarlo.',
+        )
+        return redirect('pedido_detail', pk=pedido.pk)
+
+    if pedido.cancelado:
+        messages.info(request, f'El pedido {pedido.folio} ya estaba cancelado.')
+        return redirect('pedido_detail', pk=pedido.pk)
+
+    motivo = ''
+    if request.method == 'POST':
+        motivo = request.POST.get('motivo', '')
+        try:
+            pedido.cancelar(request.user, motivo)
+        except MotivoCancelacionRequerido:
+            messages.error(request, 'Escribe el motivo de la cancelación.')
+            return render(request, 'core/pedido_cancelar.html', {
+                'pedido': pedido,
+                'motivo': motivo,
+                'falta_motivo': True,
+            })
+        messages.success(request, f'Se canceló el pedido {pedido.folio}.')
+        return redirect('pedido_detail', pk=pedido.pk)
+
+    return render(request, 'core/pedido_cancelar.html', {
+        'pedido': pedido,
+        'motivo': motivo,
+        'falta_motivo': False,
+    })
 
 
 @login_required
@@ -240,11 +343,8 @@ def pedido_etiquetas_pdf(request, pk):
 
 
 @login_required
+@solo_admin
 def calibracion(request):
-    if not es_admin(request.user):
-        messages.error(request, 'Esta pantalla es solo para administradores.')
-        return redirect('pedido_list')
-
     config = Configuracion.obtener()
 
     if request.method == 'POST':

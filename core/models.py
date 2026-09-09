@@ -109,6 +109,34 @@ class PedidoSinResultados(Exception):
     """Se intentó emitir un pedido sin ningún resultado de laboratorio capturado."""
 
 
+class PedidoEmitidoNoSeElimina(Exception):
+    """Se intentó borrar de la base un pedido que ya tiene folio.
+
+    Un pedido emitido ya salió de la empresa: se cancela, nunca se borra, para
+    no dejar huecos en la numeración consecutiva.
+    """
+
+
+class PedidoNoEmitido(Exception):
+    """Se intentó cancelar un pedido que todavía no se ha emitido."""
+
+
+class MotivoCancelacionRequerido(Exception):
+    """Se intentó cancelar un pedido sin escribir el motivo."""
+
+
+class PedidoQuerySet(models.QuerySet):
+    def delete(self):
+        """Última barrera: ni siquiera un borrado masivo puede llevarse un
+        pedido emitido."""
+        if self.filter(models.Q(emitido=True) | models.Q(folio__isnull=False)).exists():
+            raise PedidoEmitidoNoSeElimina(
+                'Hay pedidos emitidos en la selección. Un pedido con folio no se '
+                'elimina: se cancela.'
+            )
+        return super().delete()
+
+
 class Pedido(models.Model):
     # El folio (formato ####-AAMM) solo se asigna al emitir el certificado;
     # un borrador se identifica por su id interno. Ver Pedido.emitir().
@@ -120,6 +148,20 @@ class Pedido(models.Model):
     fecha_emision = models.DateTimeField(null=True, blank=True)
     cliente_snapshot = models.JSONField(null=True, blank=True)
 
+    # Cancelación: el pedido conserva folio, renglones, resultados y snapshots.
+    cancelado = models.BooleanField(default=False)
+    fecha_cancelacion = models.DateTimeField(null=True, blank=True)
+    usuario_cancelacion = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='pedidos_cancelados',
+    )
+    motivo_cancelacion = models.TextField(blank=True)
+
+    objects = PedidoQuerySet.as_manager()
+
     class Meta:
         ordering = ['-id']
 
@@ -129,6 +171,38 @@ class Pedido(models.Model):
     @property
     def tiene_resultados(self):
         return ResultadoLaboratorio.objects.filter(renglon__pedido=self).exclude(texto='').exists()
+
+    @property
+    def se_puede_eliminar(self):
+        """Solo los pedidos que nunca salieron de la empresa."""
+        return not self.emitido and not self.folio
+
+    def delete(self, *args, **kwargs):
+        if not self.se_puede_eliminar:
+            raise PedidoEmitidoNoSeElimina(
+                f'El pedido {self.folio} ya fue emitido. Un pedido con folio no se '
+                f'elimina: se cancela.'
+            )
+        return super().delete(*args, **kwargs)
+
+    def cancelar(self, usuario, motivo):
+        """Anula un pedido emitido conservando todo su registro."""
+        if not self.emitido:
+            raise PedidoNoEmitido('Solo se puede cancelar un pedido ya emitido.')
+        if self.cancelado:
+            return
+
+        motivo = (motivo or '').strip()
+        if not motivo:
+            raise MotivoCancelacionRequerido('Hay que escribir el motivo de la cancelación.')
+
+        self.cancelado = True
+        self.fecha_cancelacion = timezone.now()
+        self.usuario_cancelacion = usuario
+        self.motivo_cancelacion = motivo
+        self.save(update_fields=[
+            'cancelado', 'fecha_cancelacion', 'usuario_cancelacion', 'motivo_cancelacion',
+        ])
 
     def emitir(self):
         """Asigna folio, congela los snapshots y marca el pedido como emitido.

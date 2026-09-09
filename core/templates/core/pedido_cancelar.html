@@ -1,0 +1,47 @@
+{% extends 'core/base.html' %}
+{% block titulo %}Cancelar pedido {{ pedido.folio }} — Esencias Gama{% endblock %}
+{% block content %}
+<div class="encabezado-lista">
+    <h1>Cancelar pedido {{ pedido.folio }}</h1>
+    <a class="boton-secundario boton" href="{% url 'pedido_detail' pedido.pk %}">Volver al pedido</a>
+</div>
+
+<div class="tarjeta caja-confirmacion">
+    <div class="confirmacion-cabecera confirmacion-peligro">
+        <h2>¿Cancelar este pedido?</h2>
+        <p>
+            El pedido no se borra: conserva su folio, sus renglones y sus resultados, y queda
+            marcado como cancelado. Después de esto ya no se podrá editar ni volver a emitir.
+        </p>
+    </div>
+
+    <dl class="detalle-encabezado confirmacion-datos">
+        <dt>Cliente</dt>
+        <dd><strong>{{ pedido.cliente.razon_social|default:pedido.cliente.nombre_corto }}</strong> ({{ pedido.cliente.codigo }})</dd>
+        <dt>Folio</dt>
+        <dd><span class="folio">{{ pedido.folio }}</span></dd>
+        <dt>Emitido el</dt>
+        <dd>{{ pedido.fecha_emision|date:'d/m/Y H:i' }}</dd>
+    </dl>
+
+    <form method="post" class="confirmacion-acciones-columna">
+        {% csrf_token %}
+        <div class="campo campo-motivo">
+            <label for="id_motivo">Motivo de la cancelación <span class="obligatorio">(obligatorio)</span></label>
+            <textarea id="id_motivo" name="motivo" rows="3"
+                      placeholder="Ej. El cliente canceló el pedido antes del embarque."
+                      required>{{ motivo }}</textarea>
+            {% if falta_motivo %}
+            <p class="ayuda-campo error">Hay que escribir el motivo para poder cancelar.</p>
+            {% else %}
+            <p class="ayuda-campo">Queda guardado junto con tu usuario y la fecha, como registro de por qué se anuló.</p>
+            {% endif %}
+        </div>
+
+        <div class="confirmacion-acciones">
+            <button type="submit" class="boton boton-peligro">Sí, cancelar el pedido</button>
+            <a class="boton-secundario boton" href="{% url 'pedido_detail' pedido.pk %}">No, regresar</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
