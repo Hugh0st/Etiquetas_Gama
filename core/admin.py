@@ -1,6 +1,14 @@
 from django.contrib import admin
 
 from .models import Cliente, LineaEspecificacion, Producto
+from .permisos import es_admin
+
+# El admin de Django es la pantalla "Catálogos". Django normalmente solo pide
+# que el usuario tenga marcado "Staff status"; aquí además exigimos el rol
+# admin. Así, aunque a alguien se le marque "Staff status" por error, si no
+# está en el grupo "admin" no entra. Esta verificación corre en el servidor:
+# no depende de que el enlace esté oculto en el menú.
+admin.site.has_permission = lambda request: es_admin(request.user)
 
 
 @admin.register(Cliente)

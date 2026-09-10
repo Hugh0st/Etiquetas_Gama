@@ -22,10 +22,22 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-)6@fr1!2hb%e!q+%lnb5supegj)^2q-&djpo%5c6cubysibe#&'
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# ---------------------------------------------------------------------------
+# Puesta en marcha en la oficina
+# ---------------------------------------------------------------------------
+# DEBUG en False es lo correcto para el uso diario: si algo truena, el usuario
+# ve una pantalla de error sobria en vez del detalle técnico, y el error queda
+# anotado en logs\errores.log para que tú lo revises.
+#
+# Si alguna vez necesitas diagnosticar algo tú mismo, ponlo en True un rato,
+# reinicia el servidor, y acuérdate de regresarlo a False.
+DEBUG = False
 
-ALLOWED_HOSTS = []
+# Con DEBUG = False, Django exige que le digas a qué nombres/direcciones puede
+# responder. Este sistema solo vive en la red local de la oficina (no está
+# publicado a internet), así que '*' acepta tanto "localhost" como la IP de la
+# PC desde las otras computadoras.
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
@@ -126,3 +138,55 @@ LOGOUT_REDIRECT_URL = 'login'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+# ---------------------------------------------------------------------------
+# Respaldos automáticos
+# ---------------------------------------------------------------------------
+# Carpeta donde el comando "respaldar_bd" deja las copias diarias de la base.
+# Está en G:, que es un disco físico distinto al C: donde vive el sistema: si
+# se muere el SSD, los respaldos siguen ahí.
+# Si algún día cambias de disco, este es el único lugar que hay que editar.
+CARPETA_RESPALDOS = Path(r'G:\RespaldosEsenciasGama')
+
+
+# ---------------------------------------------------------------------------
+# Registro de errores
+# ---------------------------------------------------------------------------
+# Con DEBUG = False el usuario ya no ve el detalle técnico del error, así que
+# lo guardamos en un archivo para que tú puedas revisarlo después:
+#
+#     logs\errores.log
+#
+# El archivo se rota solo: cuando pasa de 2 MB empieza uno nuevo y conserva
+# los 3 anteriores, para que no crezca sin control.
+CARPETA_LOGS = BASE_DIR / 'logs'
+CARPETA_LOGS.mkdir(exist_ok=True)
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'sencillo': {
+            'format': '{asctime}  {levelname}  {name}  {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'archivo': {
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': str(CARPETA_LOGS / 'errores.log'),
+            'maxBytes': 2 * 1024 * 1024,
+            'backupCount': 3,
+            'encoding': 'utf-8',
+            'formatter': 'sencillo',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['archivo'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+    },
+}

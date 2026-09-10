@@ -16,7 +16,7 @@ def corregir_fk_pedido(apps, schema_editor):
     correcta usamos el modelo real de la app (ya con su FK bien resuelta a
     Pedido.id) y le pedimos al editor de esquema que reconstruya la tabla.
     """
-    from core.models import RenglonPedido
+    RenglonPedido = apps.get_model('core', 'RenglonPedido')
     schema_editor._remake_table(RenglonPedido)
 
 
