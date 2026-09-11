@@ -5,7 +5,7 @@ REM  Lo llama el Programador de tareas de Windows una vez al dia.
 REM
 REM  Si algun dia mueves el proyecto de carpeta, cambia SOLO esta linea:
 REM ===================================================================
-set PROYECTO=C:\Users\hugoc\Desktop\Esencias Gama\EtiquetasGama
+set PROYECTO=C:\EsenciasGama
 
 cd /d "%PROYECTO%"
 if not exist "logs" mkdir "logs"

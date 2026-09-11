@@ -147,7 +147,12 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Está en G:, que es un disco físico distinto al C: donde vive el sistema: si
 # se muere el SSD, los respaldos siguen ahí.
 # Si algún día cambias de disco, este es el único lugar que hay que editar.
-CARPETA_RESPALDOS = Path(r'G:\RespaldosEsenciasGama')
+CARPETA_RESPALDOS = BASE_DIR / 'respaldos'
+
+try:
+    from .config_local import *
+except ImportError:
+    pass
 
 
 # ---------------------------------------------------------------------------

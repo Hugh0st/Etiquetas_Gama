@@ -1,3 +1,0 @@
-2026-09-09 22:22:41,910  WARNING  django.request  Not Found: /pedidos/1/eliminar/
-2026-09-09 22:22:42,190  WARNING  django.request  Not Found: /pedidos/1/cancelar/
-2026-09-09 22:22:42,216  WARNING  django.request  Not Found: /pedidos/1/eliminar/
