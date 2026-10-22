@@ -87,7 +87,8 @@
     <tbody>
         {% for renglon in renglones %}
         <tr>
-            <td>{{ renglon.producto.modelo }} — {{ renglon.producto.descripcion }}</td>
+            {# La del renglón: es la que se va a imprimir #}
+            <td>{{ renglon.producto.modelo }} — {{ renglon.descripcion_impresion }}</td>
             <td>{{ renglon.unidad }}</td>
             <td>{{ renglon.cas }}</td>
             <td>{{ renglon.onu }}</td>

@@ -552,7 +552,37 @@ input[readonly] { background: var(--fondo); color: var(--tinta-2); }
     font-family: inherit;
 }
 .quitar-renglon:hover { background: var(--error-bg); }
+/* Oculta la casilla DELETE del formset, que se maneja con el botón "Quitar" */
 .renglon input[type="checkbox"] { display: none; }
+
+/* Descripción del producto: editable, para corregir los nombres que vinieron
+   mal del sistema viejo. Es texto largo, así que se queda con el espacio que
+   sobre en el renglón. */
+.campo-descripcion { flex: 1 1 360px; min-width: 320px; }
+.campo-descripcion input[type="text"] { width: 100%; }
+
+/* Casilla de "corregir también en el catálogo": el JS la muestra solo cuando
+   el texto escrito es distinto al del catálogo. Lleva su propia regla de
+   display, así que necesita su propio [hidden] para que el JS la oculte. */
+.corregir-catalogo {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 6px 0 0;
+    font-size: 12.5px;
+    color: var(--cafe-700);
+    cursor: pointer;
+}
+.corregir-catalogo[hidden] { display: none; }
+.renglon .corregir-catalogo input[type="checkbox"] {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    margin: 0;
+    flex: none;
+    accent-color: var(--verde-700);
+    cursor: pointer;
+}
 
 .acciones { margin-top: 20px; display: flex; gap: 14px; align-items: center; }
 .encabezado-lista .acciones { margin-top: 0; }

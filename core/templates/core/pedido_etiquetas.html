@@ -25,7 +25,8 @@
     <tbody>
         {% for renglon in renglones %}
         <tr>
-            <td>{{ renglon.producto.modelo }} — {{ renglon.producto.descripcion }}</td>
+            {# La del renglón: es la que va a salir en la etiqueta #}
+            <td>{{ renglon.producto.modelo }} — {{ renglon.descripcion_impresion }}</td>
             <td>{{ renglon.lote }}</td>
             <td>{{ renglon.paquetes }}</td>
         </tr>

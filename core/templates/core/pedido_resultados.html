@@ -16,7 +16,8 @@
     {% csrf_token %}
     {% for renglon in renglones %}
     <div class="bloque-renglon">
-        <h2>{{ renglon.producto.modelo }} — {{ renglon.producto.descripcion }}</h2>
+        {# La del renglón: es la que va a salir en el certificado #}
+        <h2>{{ renglon.producto.modelo }} — {{ renglon.descripcion_impresion }}</h2>
 
         {% if renglon.filas_resultado %}
         <table class="tabla tabla-resultados">

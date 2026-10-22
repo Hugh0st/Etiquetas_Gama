@@ -3,6 +3,17 @@ from django.db import IntegrityError, models, transaction
 from django.utils import timezone
 
 
+def normalizar_descripcion(texto):
+    """Deja una descripción de producto en el estilo del catálogo.
+
+    Todo el catálogo viene del sistema de consola viejo y está en mayúsculas,
+    y tanto la etiqueta como el certificado imprimen el texto tal cual. Sin
+    normalizar, el catálogo acabaría con dos estilos de escritura según quién
+    corrigió cada nombre.
+    """
+    return ' '.join((texto or '').split()).upper()
+
+
 class Cliente(models.Model):
     codigo = models.CharField(max_length=20, primary_key=True)
     nombre_corto = models.CharField(max_length=255, blank=True)
@@ -70,6 +81,34 @@ class Producto(models.Model):
 
     def __str__(self):
         return f'{self.modelo} - {self.descripcion}'
+
+    def corregir_descripcion(self, nueva, usuario, pedido=None):
+        """Corrige la descripción en el catálogo dejando registro de quién y cuándo.
+
+        Es el único camino para cambiar la descripción con bitácora, para que
+        el catálogo no se pueda actualizar sin dejar rastro. Devuelve el
+        registro creado, o None si no había nada que cambiar (texto vacío o
+        igual al que ya estaba).
+        """
+        nueva = normalizar_descripcion(nueva)
+        if not nueva or nueva == self.descripcion:
+            return None
+
+        anterior = self.descripcion
+        with transaction.atomic():
+            self.descripcion = nueva
+            self.save(update_fields=['descripcion'])
+            return CorreccionDescripcionProducto.objects.create(
+                producto=self,
+                descripcion_anterior=anterior,
+                descripcion_nueva=nueva,
+                usuario=usuario,
+                pedido=pedido,
+                origen=(
+                    CorreccionDescripcionProducto.ORIGEN_PEDIDO if pedido
+                    else CorreccionDescripcionProducto.ORIGEN_CATALOGO
+                ),
+            )
 
 
 class LineaEspecificacion(models.Model):
@@ -258,6 +297,11 @@ class Pedido(models.Model):
 class RenglonPedido(models.Model):
     pedido = models.ForeignKey(Pedido, on_delete=models.CASCADE, related_name='renglones')
     producto = models.ForeignKey(Producto, on_delete=models.PROTECT, related_name='renglones_pedido')
+    # Descripción del producto tal como la lleva ESTE pedido. Se autollena con
+    # la del catálogo al capturar el renglón y el usuario la puede corregir.
+    # Vive aquí, y no se lee del catálogo al imprimir, para que un pedido ya
+    # emitido no cambie si alguien corrige el catálogo después.
+    descripcion = models.CharField(max_length=255, blank=True)
     cantidad = models.DecimalField(max_digits=12, decimal_places=3)
     unidad = models.CharField(max_length=20, blank=True)
     cas = models.CharField(max_length=50, blank=True)
@@ -273,6 +317,16 @@ class RenglonPedido(models.Model):
 
     class Meta:
         ordering = ['pedido', 'id']
+
+    @property
+    def descripcion_impresion(self):
+        """La descripción que llevan la etiqueta, el certificado y las pantallas.
+
+        Siempre la del renglón. El respaldo al catálogo solo cubre el caso de
+        un renglón que quedara sin descripción; los que ya existían cuando se
+        agregó el campo los llenó la migración 0016.
+        """
+        return self.descripcion or self.producto.descripcion
 
     @property
     def peso_neto(self):
@@ -297,6 +351,69 @@ class ResultadoLaboratorio(models.Model):
 
     def __str__(self):
         return f'{self.renglon_id} [{self.orden}]'
+
+
+class CorreccionDescripcionProducto(models.Model):
+    """Bitácora de las correcciones a la descripción de un producto.
+
+    Las descripciones se importaron del sistema de consola viejo y algunas
+    quedaron mal (nombres invertidos, por ejemplo). No se revisa el catálogo
+    completo: se corrige sobre la marcha, conforme cada producto se usa, desde
+    la captura del pedido o desde Catálogos. Cada corrección queda registrada
+    aquí para poder rastrear después de dónde salió un nombre.
+
+    Se escribe solo desde Producto.corregir_descripcion() y desde el admin de
+    Producto. No se edita a mano: es bitácora.
+    """
+    ORIGEN_PEDIDO = 'pedido'
+    ORIGEN_CATALOGO = 'catalogo'
+    ORIGEN_CHOICES = [
+        (ORIGEN_PEDIDO, 'Captura del pedido'),
+        (ORIGEN_CATALOGO, 'Catálogos'),
+    ]
+
+    producto = models.ForeignKey(
+        Producto,
+        on_delete=models.PROTECT,
+        related_name='correcciones_descripcion',
+    )
+    descripcion_anterior = models.CharField(max_length=255, blank=True)
+    descripcion_nueva = models.CharField(max_length=255)
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name='correcciones_descripcion',
+    )
+    fecha = models.DateTimeField(auto_now_add=True)
+    origen = models.CharField(max_length=10, choices=ORIGEN_CHOICES)
+    # De qué pedido salió la corrección. SET_NULL y no CASCADE porque un
+    # borrador sí se puede eliminar, y el registro no debe irse con él: el
+    # catálogo ya quedó cambiado. Por eso el origen se guarda en su propio
+    # campo y no se deduce de que este quede vacío.
+    pedido = models.ForeignKey(
+        Pedido,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='correcciones_descripcion',
+    )
+
+    class Meta:
+        ordering = ['-fecha']
+        verbose_name = 'Corrección de descripción'
+        verbose_name_plural = 'Correcciones de descripción'
+
+    def __str__(self):
+        return f'{self.producto_id}: "{self.descripcion_anterior}" → "{self.descripcion_nueva}"'
+
+    @property
+    def procedencia(self):
+        """Dónde se hizo la corrección, para leerla de un vistazo en la bitácora."""
+        if self.origen == self.ORIGEN_CATALOGO:
+            return 'Catálogos'
+        if self.pedido_id is None:
+            return 'Pedido (ya eliminado)'
+        return f'Pedido {self.pedido.folio or f"borrador #{self.pedido_id}"}'
 
 
 class Configuracion(models.Model):

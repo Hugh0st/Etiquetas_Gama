@@ -25,6 +25,48 @@ LIMITE_BUSQUEDA = 20
 POSICIONES_VALIDAS = {1, 2, 3}
 
 
+def _aplicar_correcciones_catalogo(formset, usuario, pedido):
+    """Propaga al catálogo la descripción de los renglones cuya casilla
+    "Corregir también en el catálogo" quedó marcada.
+
+    El formulario ya descartó las casillas cuyo texto no difiere del catálogo,
+    y el formset ya rechazó que dos renglones del mismo producto pidan
+    descripciones distintas. Devuelve los modelos corregidos, para avisarle al
+    usuario qué cambió para todos los pedidos futuros.
+    """
+    corregidos = []
+    vistos = set()
+    for form in formset.forms:
+        datos = form.cleaned_data
+        if not datos or datos.get('DELETE') or not datos.get('corregir_catalogo'):
+            continue
+        producto = datos['producto']
+        # Dos renglones del mismo producto traen dos instancias distintas en
+        # memoria; sin esto el segundo repetiría la corrección en la bitácora.
+        if producto.pk in vistos:
+            continue
+        vistos.add(producto.pk)
+        if producto.corregir_descripcion(datos['descripcion'], usuario, pedido):
+            corregidos.append(producto.modelo)
+    return corregidos
+
+
+def _avisar_correcciones(request, corregidos):
+    """Avisa qué productos quedaron corregidos en el catálogo.
+
+    Se llama ya fuera de la transacción: si el guardado se deshizo, no hay
+    nada que avisar.
+    """
+    if not corregidos:
+        return
+    modelos = ', '.join(corregidos)
+    messages.success(
+        request,
+        f'Se corrigió la descripción en el catálogo de {modelos}. '
+        f'Los pedidos nuevos ya la usarán.',
+    )
+
+
 def _pedidos_con_conteos(queryset):
     return queryset.annotate(
         num_renglones=Count('renglones', distinct=True),
@@ -89,7 +131,9 @@ def pedido_create(request):
                 pedido.save()
                 formset.instance = pedido
                 formset.save()
+                corregidos = _aplicar_correcciones_catalogo(formset, request.user, pedido)
             messages.success(request, 'Pedido creado.')
+            _avisar_correcciones(request, corregidos)
             return redirect('pedido_detail', pk=pedido.pk)
     else:
         form = PedidoForm()
@@ -119,7 +163,9 @@ def pedido_edit(request, pk):
             with transaction.atomic():
                 form.save()
                 formset.save()
+                corregidos = _aplicar_correcciones_catalogo(formset, request.user, pedido)
             messages.success(request, 'Pedido actualizado.')
+            _avisar_correcciones(request, corregidos)
             return redirect('pedido_detail', pk=pedido.pk)
     else:
         form = PedidoForm(instance=pedido)
@@ -396,6 +442,9 @@ def api_productos_buscar(request):
             {
                 'valor': p.modelo,
                 'texto': f'{p.modelo} — {p.descripcion}',
+                # Suelta, además de dentro de 'texto', para poder autollenar
+                # con ella el campo editable de descripción del renglón.
+                'descripcion': p.descripcion,
                 'unidad': p.unidad,
                 'cas': p.cas,
                 'onu': p.onu,

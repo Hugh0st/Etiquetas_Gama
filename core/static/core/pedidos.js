@@ -84,6 +84,40 @@
         });
     }
 
+    // Mismo criterio que normalizar_descripcion() en el servidor: si no
+    // coincidieran, la casilla podría aparecer por una diferencia que el
+    // servidor no considera diferencia (espacios dobles o minúsculas).
+    function normalizarDescripcion(texto) {
+        return (texto || '').trim().replace(/\s+/g, ' ').toUpperCase();
+    }
+
+    // La casilla de "corregir también en el catálogo" solo aparece cuando lo
+    // escrito es realmente distinto a lo que el catálogo tiene hoy. Si el
+    // usuario regresa al texto original, se oculta y se desmarca: no tiene
+    // sentido "corregir" con lo mismo. Esto es solo la pantalla; quien decide
+    // si se toca el catálogo es el servidor.
+    function activarCorreccionDescripcion(renglon) {
+        const descripcion = renglon.querySelector('[name$="-descripcion"]');
+        const producto = renglon.querySelector('[name$="-producto"]');
+        const casilla = renglon.querySelector('.corregir-catalogo');
+        const marca = casilla.querySelector('input[type="checkbox"]');
+
+        function revisar() {
+            const catalogo = normalizarDescripcion(renglon.dataset.descripcionCatalogo);
+            const escrito = normalizarDescripcion(descripcion.value);
+            // Mientras no haya producto elegido no hay catálogo que corregir.
+            // Un producto cuya descripción en el catálogo esté vacía sí
+            // cuenta: llenarla es la misma clase de arreglo que enderezar un
+            // nombre invertido.
+            const distinto = producto.value !== '' && escrito !== '' && escrito !== catalogo;
+            casilla.hidden = !distinto;
+            if (!distinto) marca.checked = false;
+        }
+
+        descripcion.addEventListener('input', revisar);
+        return revisar;
+    }
+
     function actualizarPesoNeto(renglon) {
         const bruto = parseFloat(renglon.querySelector('[name$="-peso_bruto"]').value);
         const tara = parseFloat(renglon.querySelector('[name$="-peso_tara"]').value);
@@ -97,11 +131,20 @@
         const unidad = renglon.querySelector('[name$="-unidad"]');
         const cas = renglon.querySelector('[name$="-cas"]');
         const onu = renglon.querySelector('[name$="-onu"]');
+        const descripcion = renglon.querySelector('[name$="-descripcion"]');
+        const revisarCorreccion = activarCorreccionDescripcion(renglon);
 
         attachAutocomplete(buscarProducto, '/api/productos/', (item) => {
             buscarProducto.value = item.texto;
             productoHidden.value = item.valor;
             unidad.value = item.unidad;
+
+            // Al cambiar de producto la descripción se rehace con la del
+            // nuevo: lo que se hubiera corregido para el anterior ya no
+            // aplica, y dejarlo sería imprimir un nombre que no es.
+            renglon.dataset.descripcionCatalogo = item.descripcion;
+            descripcion.value = item.descripcion;
+            revisarCorreccion();
 
             if (item.cas) {
                 cas.value = item.cas;
@@ -123,6 +166,11 @@
         renglon.querySelector('[name$="-peso_bruto"]').addEventListener('input', () => actualizarPesoNeto(renglon));
         renglon.querySelector('[name$="-peso_tara"]').addEventListener('input', () => actualizarPesoNeto(renglon));
         actualizarPesoNeto(renglon);
+
+        // Al abrir la pantalla: si este renglón ya traía una descripción
+        // distinta a la del catálogo (porque se corrigió antes sin marcar la
+        // casilla), la casilla aparece ofreciendo corregirlo ahora.
+        revisarCorreccion();
 
         renglon.querySelector('.quitar-renglon').addEventListener('click', () => {
             renglon.querySelector('[name$="-DELETE"]').checked = true;

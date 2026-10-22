@@ -53,7 +53,9 @@ def valores_renglon(pedido, renglon):
     cliente = pedido.cliente
     return {
         'vendido_a': cliente.razon_social or cliente.nombre_corto,
-        'producto': renglon.producto.descripcion,
+        # La del renglón, no la del catálogo: si alguien corrige el catálogo
+        # después, las etiquetas de este pedido siguen diciendo lo mismo.
+        'producto': renglon.descripcion_impresion,
         'lote': renglon.lote,
         'salida': renglon.salida,
         'cas': renglon.cas,

@@ -1,5 +1,5 @@
 {% extends 'core/base.html' %}
-{% load static %}
+{% load estaticos %}
 {% block titulo %}{% if pedido %}Editar borrador #{{ pedido.pk }}{% else %}Nuevo pedido{% endif %} — Esencias Gama{% endblock %}
 {% block content %}
 <h1>{% if pedido %}Editar borrador #{{ pedido.pk }}{% else %}Nuevo pedido{% endif %}</h1>
@@ -57,5 +57,7 @@
     </div>
 </form>
 
-<script src="{% static 'core/pedidos.js' %}"></script>
+{# Versionado igual que la hoja de estilos: si no, el navegador sigue usando el
+   pedidos.js que tenía en caché y los cambios de la pantalla no aparecen. #}
+<script src="{% estatico_versionado 'core/pedidos.js' %}"></script>
 {% endblock %}

@@ -1,4 +1,13 @@
-<div class="renglon">
+{% comment %}
+data-descripcion-catalogo guarda la descripción que el catálogo tiene AHORA
+para ese producto. El JS la compara contra lo escrito para decidir si muestra
+la casilla de corregir el catálogo, y la rehace al cambiar de producto. Si el
+renglón todavía no tiene producto, queda vacía.
+
+Comentario de varias líneas: va con esta etiqueta y no con la forma corta de
+llaves y gato, que solo oculta una línea y en varias se imprime en la página.
+{% endcomment %}
+<div class="renglon" data-descripcion-catalogo="{{ form.instance.producto.descripcion|default_if_none:'' }}">
     {{ form.id }}
     {{ form.DELETE }}
     <div class="renglon-cabecera">
@@ -20,6 +29,22 @@
         <ul class="resultados" hidden></ul>
         {{ form.producto.errors }}
         {{ form.producto }}
+    </div>
+
+    {% comment %}
+    Editable a propósito: muchas descripciones vinieron mal del sistema viejo y
+    se corrigen aquí, sin tener que entrar a Catálogos. Lo que se escriba se
+    guarda siempre en este renglón; el catálogo solo cambia si se marca la
+    casilla, y el JS la muestra solo cuando el texto difiere del catálogo.
+    {% endcomment %}
+    <div class="campo campo-descripcion">
+        <label for="{{ form.descripcion.id_for_label }}">{{ form.descripcion.label }}</label>
+        {{ form.descripcion }}
+        {{ form.descripcion.errors }}
+        <label class="corregir-catalogo" hidden>
+            {{ form.corregir_catalogo }}
+            <span>{{ form.corregir_catalogo.label }}</span>
+        </label>
     </div>
 
     <div class="campo">

@@ -29,7 +29,17 @@
       "Bash(\"./venv/Scripts/python.exe\" manage.py makemigrations --check --dry-run core)",
       "Bash(\"./venv/Scripts/python.exe\" manage.py migrate core 0006)",
       "Bash(\"./venv/Scripts/python.exe\" manage.py makemigrations --check --dry-run)",
-      "Bash(\"./venv/Scripts/python.exe\" manage.py showmigrations core)"
+      "Bash(\"./venv/Scripts/python.exe\" manage.py showmigrations core)",
+      "PowerShell(& \".\\\\venv\\\\Scripts\\\\python.exe\" manage.py makemigrations core --name renglonpedido_descripcion_y_bitacora_correcciones)",
+      "PowerShell(& \".\\\\venv\\\\Scripts\\\\python.exe\" manage.py test core.tests_humo_correccion -v 2)",
+      "PowerShell(& \".\\\\venv\\\\Scripts\\\\python.exe\" manage.py test core.tests_humo_correccion 2>&1)",
+      "PowerShell(Remove-Item \".\\\\core\\\\tests_humo_correccion.py\" -Confirm:$false; if \\(-not \\(Test-Path \".\\\\core\\\\tests_humo_correccion.py\"\\)\\) { \"Borrado\" })",
+      "PowerShell(& \".\\\\venv\\\\Scripts\\\\python.exe\" manage.py check)",
+      "PowerShell(& \".\\\\venv\\\\Scripts\\\\python.exe\" -c \"import ast,sys; [ast.parse\\(open\\(f,encoding='utf-8'\\).read\\(\\)\\) for f in ['core/models.py','core/forms.py','core/views.py','core/admin.py','core/etiquetas.py','core/certificado.py']]; print\\('Sintaxis OK'\\)\")",
+      "PowerShell(& \".\\\\venv\\\\Scripts\\\\python.exe\" manage.py test core.tests_humo_render -v 2 2>&1)",
+      "PowerShell(node \"C:\\\\Users\\\\hugoc\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-hugoc-Desktop-Esencias-Gama-EtiquetasGama\\\\b36b9d1e-33ba-4f6c-831f-ea6b4e821c0a\\\\scratchpad\\\\sim_casilla.js\")",
+      "PowerShell(Remove-Item \".\\\\core\\\\tests_humo_render.py\" -Confirm:$false)",
+      "PowerShell(& \".\\\\venv\\\\Scripts\\\\python.exe\" manage.py makemigrations --check --dry-run)"
     ]
   }
 }

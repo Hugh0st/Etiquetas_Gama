@@ -211,7 +211,9 @@ def _tabla_datos(pedido, renglon, cliente_nombre, styles):
     filas = [
         fila('FECHA/DATE:', pedido.fecha_emision.strftime('%d/%m/%Y')),
         fila('CLIENTE/CUSTOMER:', cliente_nombre),
-        fila('PRODUCTO/PRODUCT:', renglon.producto.descripcion),
+        # La descripción del renglón, no la del catálogo: un certificado ya
+        # emitido no cambia si después alguien corrige el catálogo.
+        fila('PRODUCTO/PRODUCT:', renglon.descripcion_impresion),
         fila('CANTIDAD/QUANTITY:', cantidad_texto),
         fila('No. DE LOTE/BATCH No:', renglon.lote),
         fila('No. DE PAQUETES:', numero_a_letras(renglon.paquetes)),
