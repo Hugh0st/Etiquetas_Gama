@@ -39,7 +39,15 @@
       "PowerShell(& \".\\\\venv\\\\Scripts\\\\python.exe\" manage.py test core.tests_humo_render -v 2 2>&1)",
       "PowerShell(node \"C:\\\\Users\\\\hugoc\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-hugoc-Desktop-Esencias-Gama-EtiquetasGama\\\\b36b9d1e-33ba-4f6c-831f-ea6b4e821c0a\\\\scratchpad\\\\sim_casilla.js\")",
       "PowerShell(Remove-Item \".\\\\core\\\\tests_humo_render.py\" -Confirm:$false)",
-      "PowerShell(& \".\\\\venv\\\\Scripts\\\\python.exe\" manage.py makemigrations --check --dry-run)"
+      "PowerShell(& \".\\\\venv\\\\Scripts\\\\python.exe\" manage.py makemigrations --check --dry-run)",
+      "PowerShell(& \".\\\\venv\\\\Scripts\\\\python.exe\" \"C:\\\\Users\\\\hugoc\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-hugoc-Desktop-Esencias-Gama-EtiquetasGama\\\\b36b9d1e-33ba-4f6c-831f-ea6b4e821c0a\\\\scratchpad\\\\revisar_comentarios.py\" \".\\\\core\\\\templates\")",
+      "PowerShell(& \".\\\\venv\\\\Scripts\\\\python.exe\" \"C:\\\\Users\\\\hugoc\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-hugoc-Desktop-Esencias-Gama-EtiquetasGama\\\\b36b9d1e-33ba-4f6c-831f-ea6b4e821c0a\\\\scratchpad\\\\inspeccionar_catalogo.py\")",
+      "PowerShell(& \".\\\\venv\\\\Scripts\\\\python.exe\" \"C:\\\\Users\\\\hugoc\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-hugoc-Desktop-Esencias-Gama-EtiquetasGama\\\\b36b9d1e-33ba-4f6c-831f-ea6b4e821c0a\\\\scratchpad\\\\inspeccionar_cortos.py\")",
+      "PowerShell(& \".\\\\venv\\\\Scripts\\\\python.exe\" manage.py test core.tests -v 2 2>&1)",
+      "PowerShell(node --check \".\\\\core\\\\static\\\\core\\\\pedidos.js\")",
+      "PowerShell(& \".\\\\venv\\\\Scripts\\\\python.exe\" manage.py test core.tests_humo2 -v 2 2>&1)",
+      "PowerShell(& \".\\\\venv\\\\Scripts\\\\python.exe\" \"C:\\\\Users\\\\hugoc\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-hugoc-Desktop-Esencias-Gama-EtiquetasGama\\\\b36b9d1e-33ba-4f6c-831f-ea6b4e821c0a\\\\scratchpad\\\\validar_regla_catalogo.py\")",
+      "PowerShell(node \"C:\\\\Users\\\\hugoc\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-hugoc-Desktop-Esencias-Gama-EtiquetasGama\\\\b36b9d1e-33ba-4f6c-831f-ea6b4e821c0a\\\\scratchpad\\\\sim_aviso.js\")"
     ]
   }
 }

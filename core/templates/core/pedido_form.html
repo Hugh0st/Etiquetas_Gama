@@ -57,7 +57,6 @@
     </div>
 </form>
 
-{# Versionado igual que la hoja de estilos: si no, el navegador sigue usando el
-   pedidos.js que tenía en caché y los cambios de la pantalla no aparecen. #}
+{# Versionado como la hoja de estilos: si no, el navegador reusa el JS en caché. #}
 <script src="{% estatico_versionado 'core/pedidos.js' %}"></script>
 {% endblock %}

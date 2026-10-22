@@ -3,15 +3,58 @@ from django.db import IntegrityError, models, transaction
 from django.utils import timezone
 
 
-def normalizar_descripcion(texto):
+# Separadores con los que alguien pegaría el modelo al inicio de la
+# descripción, imitando cómo se veía el buscador de productos ("E7000 — ...").
+SEPARADORES_PREFIJO = ' -–—:'
+
+
+def normalizar_descripcion(texto, modelo=None):
     """Deja una descripción de producto en el estilo del catálogo.
 
     Todo el catálogo viene del sistema de consola viejo y está en mayúsculas,
     y tanto la etiqueta como el certificado imprimen el texto tal cual. Sin
     normalizar, el catálogo acabaría con dos estilos de escritura según quién
     corrigió cada nombre.
+
+    Si se pasa el modelo, además se le quita al texto ese modelo cuando viene
+    pegado al inicio (ver _quitar_prefijo_modelo). El campo de descripción
+    lleva solo el nombre; el modelo repetido dentro es un error que después
+    habría que corregir a mano.
     """
-    return ' '.join((texto or '').split()).upper()
+    limpio = ' '.join((texto or '').split()).upper()
+    return _quitar_prefijo_modelo(limpio, modelo)
+
+
+def _quitar_prefijo_modelo(texto, modelo):
+    """Quita del inicio del texto el modelo del producto y su separador.
+
+    Red de seguridad por si alguien escribe "E7000 — BUTIRATO DE ETILO" en el
+    campo de descripción. Tres cuidados:
+
+    - No aplica a los modelos puramente numéricos (hay dos en el catálogo,
+      "6" y "8"). En nomenclatura química un número al inicio es parte del
+      nombre, y textos como "6-METIL CUMARINA" o "2 METHYL BUTIRIC ACID"
+      perderían información real.
+    - Solo mira el prefijo exacto. Los guiones y dos puntos dentro del nombre
+      son legítimos ("AC.ESC. LAVANDIN CR-516") y no se tocan.
+    - Tiene que haber un separador de verdad: en "E7000X ALGO" el modelo es el
+      arranque de una palabra más larga, no un prefijo.
+
+    Si el texto era solo el modelo, devuelve vacío para que el llamador caiga
+    al respaldo de la descripción del catálogo.
+    """
+    modelo = (modelo or '').strip().upper()
+    if not modelo or modelo.isdigit() or not texto.startswith(modelo):
+        return texto
+
+    resto = texto[len(modelo):]
+    if not resto:
+        return ''
+
+    sin_separador = resto.lstrip(SEPARADORES_PREFIJO)
+    if sin_separador == resto:
+        return texto
+    return sin_separador
 
 
 class Cliente(models.Model):
@@ -90,7 +133,7 @@ class Producto(models.Model):
         registro creado, o None si no había nada que cambiar (texto vacío o
         igual al que ya estaba).
         """
-        nueva = normalizar_descripcion(nueva)
+        nueva = normalizar_descripcion(nueva, self.modelo)
         if not nueva or nueva == self.descripcion:
             return None
 

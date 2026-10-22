@@ -131,7 +131,13 @@ class RenglonPedidoForm(forms.ModelForm):
         # encarga la vista con Producto.corregir_descripcion().
         # Si borró el campo, se queda con la del catálogo: una etiqueta sin
         # nombre de producto es peor que un nombre mal escrito.
-        descripcion = normalizar_descripcion(cleaned.get('descripcion')) or producto.descripcion
+        # El modelo va como segundo argumento para que, si alguien escribió
+        # "E7000 — BUTIRATO DE ETILO" imitando el buscador, se guarde solo el
+        # nombre y el modelo no quede repetido dentro de la descripción.
+        descripcion = (
+            normalizar_descripcion(cleaned.get('descripcion'), producto.modelo)
+            or producto.descripcion
+        )
         cleaned['descripcion'] = descripcion
 
         # Quien decide si se toca el catálogo es el servidor, comparando

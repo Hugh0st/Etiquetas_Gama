@@ -304,7 +304,7 @@ select {
 input:focus, select:focus, textarea:focus { outline: none; border-color: var(--verde-600); box-shadow: var(--foco); }
 input[readonly] { background: var(--fondo); color: var(--tinta-2); }
 
-.campo-cliente, .campo-producto { min-width: 320px; }
+.campo-cliente { min-width: 320px; }
 .campo-mes-anio { display: flex; gap: 4px; }
 
 /* Autocompletado (cliente / producto) */
@@ -326,6 +326,19 @@ input[readonly] { background: var(--fondo); color: var(--tinta-2); }
 }
 .resultados li { padding: 7px 10px; cursor: pointer; font-size: 14px; }
 .resultados li:hover, .resultados li.activo { background: var(--verde-100); }
+
+/* Resultado de producto: el modelo y el nombre en dos columnas, no como una
+   sola frase. El formato "E7000 — NOMBRE" invitaba a copiarlo completo al
+   campo de descripción, que debe llevar solo el nombre. */
+.campo-modelo .resultados li { display: flex; gap: 12px; align-items: baseline; }
+.resultado-modelo {
+    flex: 0 0 88px;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 13px;
+    color: var(--verde-700);
+}
+.resultado-nombre { flex: 1; }
+.resultado-nombre-vacio { color: var(--pendiente-fg); font-style: italic; }
 
 /* --- 4.6 Mensajes y avisos ---------------------------------------------- */
 .mensajes { list-style: none; padding: 0; margin: 0 0 18px; }
@@ -555,11 +568,35 @@ input[readonly] { background: var(--fondo); color: var(--tinta-2); }
 /* Oculta la casilla DELETE del formset, que se maneja con el botón "Quitar" */
 .renglon input[type="checkbox"] { display: none; }
 
-/* Descripción del producto: editable, para corregir los nombres que vinieron
-   mal del sistema viejo. Es texto largo, así que se queda con el espacio que
-   sobre en el renglón. */
-.campo-descripcion { flex: 1 1 360px; min-width: 320px; }
+/* El modelo es una clave corta: campo angosto y monoespaciado, para que se
+   lea como clave y no como el arranque de la descripción. El desplegable
+   necesita su propio ancho mínimo, porque hereda el del campo. */
+.campo-modelo { flex: 0 0 auto; min-width: 190px; }
+.campo-modelo .buscar-producto {
+    font-family: Consolas, "Courier New", monospace;
+    text-transform: uppercase;
+}
+.campo-modelo .resultados { min-width: 440px; }
+
+/* La descripción toma su propio renglón completo, para que no se lea como
+   continuación del modelo. Es editable a propósito: aquí se corrigen los
+   nombres que vinieron mal del sistema viejo. */
+.campo-descripcion { flex: 1 1 100%; max-width: 620px; }
 .campo-descripcion input[type="text"] { width: 100%; }
+
+/* Producto sin descripción en el catálogo (hay 19 así): se marca el campo y
+   se avisa, pero no se bloquea el guardado. */
+.campo-descripcion.sin-catalogo input[type="text"] {
+    border-color: var(--pendiente-linea);
+    background: var(--alerta-bg);
+}
+.aviso-sin-descripcion {
+    margin: 4px 0 0;
+    font-size: 12.5px;
+    color: var(--pendiente-fg);
+    max-width: 60ch;
+}
+.aviso-sin-descripcion[hidden] { display: none; }
 
 /* Casilla de "corregir también en el catálogo": el JS la muestra solo cuando
    el texto escrito es distinto al del catálogo. Lleva su propia regla de

@@ -9,7 +9,9 @@
         };
     }
 
-    function attachAutocomplete(input, url, onSelect) {
+    // renderItem es opcional: recibe el <li> y el resultado para pintarlo a
+    // mano. Sin él, el <li> muestra item.texto tal cual.
+    function attachAutocomplete(input, url, onSelect, renderItem) {
         const lista = input.nextElementSibling;
         let activo = -1;
 
@@ -35,7 +37,11 @@
             activo = -1;
             datos.forEach((item) => {
                 const li = document.createElement('li');
-                li.textContent = item.texto;
+                if (renderItem) {
+                    renderItem(li, item);
+                } else {
+                    li.textContent = item.texto;
+                }
                 li.addEventListener('mousedown', (e) => {
                     e.preventDefault();
                     onSelect(item);
@@ -91,25 +97,40 @@
         return (texto || '').trim().replace(/\s+/g, ' ').toUpperCase();
     }
 
-    // La casilla de "corregir también en el catálogo" solo aparece cuando lo
-    // escrito es realmente distinto a lo que el catálogo tiene hoy. Si el
-    // usuario regresa al texto original, se oculta y se desmarca: no tiene
-    // sentido "corregir" con lo mismo. Esto es solo la pantalla; quien decide
-    // si se toca el catálogo es el servidor.
-    function activarCorreccionDescripcion(renglon) {
+    // Maneja los dos avisos del campo de descripción:
+    //
+    // - La casilla de "corregir también en el catálogo" solo aparece cuando lo
+    //   escrito es realmente distinto a lo que el catálogo tiene hoy. Si el
+    //   usuario regresa al texto original, se oculta y se desmarca: no tiene
+    //   sentido "corregir" con lo mismo.
+    // - El aviso de que el producto no trae descripción en el catálogo (hay 19
+    //   así), para que no se pase de largo y la etiqueta salga sin nombre.
+    //
+    // Esto es solo la pantalla: quien decide si se toca el catálogo es el
+    // servidor, y nada de esto bloquea el guardado.
+    function activarDescripcion(renglon) {
+        const campo = renglon.querySelector('.campo-descripcion');
         const descripcion = renglon.querySelector('[name$="-descripcion"]');
         const producto = renglon.querySelector('[name$="-producto"]');
         const casilla = renglon.querySelector('.corregir-catalogo');
         const marca = casilla.querySelector('input[type="checkbox"]');
+        const avisoSinCatalogo = renglon.querySelector('.aviso-sin-descripcion');
 
         function revisar() {
             const catalogo = normalizarDescripcion(renglon.dataset.descripcionCatalogo);
             const escrito = normalizarDescripcion(descripcion.value);
-            // Mientras no haya producto elegido no hay catálogo que corregir.
-            // Un producto cuya descripción en el catálogo esté vacía sí
-            // cuenta: llenarla es la misma clase de arreglo que enderezar un
-            // nombre invertido.
-            const distinto = producto.value !== '' && escrito !== '' && escrito !== catalogo;
+            // Mientras no haya producto elegido no hay catálogo que corregir
+            // ni del que avisar.
+            const hayProducto = producto.value !== '';
+
+            const faltaEnCatalogo = hayProducto && catalogo === '';
+            avisoSinCatalogo.hidden = !faltaEnCatalogo;
+            campo.classList.toggle('sin-catalogo', faltaEnCatalogo);
+
+            // Un producto sin descripción en el catálogo también cuenta como
+            // distinto: llenarla es la misma clase de arreglo que enderezar
+            // un nombre invertido.
+            const distinto = hayProducto && escrito !== '' && escrito !== catalogo;
             casilla.hidden = !distinto;
             if (!distinto) marca.checked = false;
         }
@@ -132,10 +153,12 @@
         const cas = renglon.querySelector('[name$="-cas"]');
         const onu = renglon.querySelector('[name$="-onu"]');
         const descripcion = renglon.querySelector('[name$="-descripcion"]');
-        const revisarCorreccion = activarCorreccionDescripcion(renglon);
+        const revisarDescripcion = activarDescripcion(renglon);
 
         attachAutocomplete(buscarProducto, '/api/productos/', (item) => {
-            buscarProducto.value = item.texto;
+            // Solo el modelo: el campo de al lado es el del nombre, y dejar
+            // aquí "E7000 — NOMBRE" invita a escribir el modelo también allá.
+            buscarProducto.value = item.valor;
             productoHidden.value = item.valor;
             unidad.value = item.unidad;
 
@@ -144,7 +167,7 @@
             // aplica, y dejarlo sería imprimir un nombre que no es.
             renglon.dataset.descripcionCatalogo = item.descripcion;
             descripcion.value = item.descripcion;
-            revisarCorreccion();
+            revisarDescripcion();
 
             if (item.cas) {
                 cas.value = item.cas;
@@ -161,6 +184,25 @@
                 onu.value = '';
                 onu.readOnly = false;
             }
+        }, (li, item) => {
+            // El modelo y el nombre van en dos columnas, no como una sola
+            // frase: el formato "E7000 — NOMBRE" era justo lo que invitaba a
+            // copiarlo completo al campo de descripción.
+            const modelo = document.createElement('span');
+            modelo.className = 'resultado-modelo';
+            modelo.textContent = item.valor;
+
+            const nombre = document.createElement('span');
+            nombre.className = 'resultado-nombre';
+            if (item.descripcion) {
+                nombre.textContent = item.descripcion;
+            } else {
+                // Se avisa desde aquí, antes de elegirlo, no solo después.
+                nombre.textContent = 'sin descripción en el catálogo';
+                nombre.classList.add('resultado-nombre-vacio');
+            }
+
+            li.append(modelo, nombre);
         });
 
         renglon.querySelector('[name$="-peso_bruto"]').addEventListener('input', () => actualizarPesoNeto(renglon));
@@ -169,8 +211,9 @@
 
         // Al abrir la pantalla: si este renglón ya traía una descripción
         // distinta a la del catálogo (porque se corrigió antes sin marcar la
-        // casilla), la casilla aparece ofreciendo corregirlo ahora.
-        revisarCorreccion();
+        // casilla), la casilla aparece ofreciendo corregirlo ahora; y si el
+        // producto no tiene descripción en el catálogo, sale el aviso.
+        revisarDescripcion();
 
         renglon.querySelector('.quitar-renglon').addEventListener('click', () => {
             renglon.querySelector('[name$="-DELETE"]').checked = true;

@@ -21,11 +21,16 @@ llaves y gato, que solo oculta una línea y en varias se imprime en la página.
     </ul>
     {% endif %}
 
-    <div class="campo campo-producto">
-        <label>Producto</label>
+    {% comment %}
+    El campo se queda solo con el modelo una vez elegido el producto, y va en
+    monoespaciada: así se lee como una clave y no como el arranque de la
+    descripción que está debajo. Se sigue buscando por modelo o por nombre.
+    {% endcomment %}
+    <div class="campo campo-modelo">
+        <label>Modelo</label>
         <input type="text" class="buscar-producto" autocomplete="off"
-               value="{% if form.instance.pk %}{{ form.instance.producto.modelo }} — {{ form.instance.producto.descripcion }}{% endif %}"
-               placeholder="Modelo o descripción">
+               value="{% if form.instance.pk %}{{ form.instance.producto.modelo }}{% endif %}"
+               placeholder="Busca por modelo o por nombre">
         <ul class="resultados" hidden></ul>
         {{ form.producto.errors }}
         {{ form.producto }}
@@ -41,6 +46,12 @@ llaves y gato, que solo oculta una línea y en varias se imprime en la página.
         <label for="{{ form.descripcion.id_for_label }}">{{ form.descripcion.label }}</label>
         {{ form.descripcion }}
         {{ form.descripcion.errors }}
+        <p class="ayuda-campo">Solo el nombre del producto, sin el modelo.</p>
+        {# Lo muestra el JS cuando el producto elegido no trae descripción en el catálogo. #}
+        <p class="aviso-sin-descripcion" hidden>
+            Este producto no tiene descripción registrada en el catálogo.
+            Escríbela y marca la casilla para que quede guardada.
+        </p>
         <label class="corregir-catalogo" hidden>
             {{ form.corregir_catalogo }}
             <span>{{ form.corregir_catalogo.label }}</span>

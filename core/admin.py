@@ -39,8 +39,11 @@ class ProductoAdminForm(forms.ModelForm):
 
     def clean_descripcion(self):
         # Mismo criterio que en la captura del pedido, para que el catálogo no
-        # termine con dos estilos de escritura según dónde se corrigió.
-        return normalizar_descripcion(self.cleaned_data['descripcion'])
+        # termine con dos estilos de escritura según dónde se corrigió. El
+        # modelo se toma de cleaned_data (Django limpia los campos en el orden
+        # del modelo, y modelo va primero) y, si no validó, de la instancia.
+        modelo = self.cleaned_data.get('modelo') or self.instance.modelo
+        return normalizar_descripcion(self.cleaned_data['descripcion'], modelo)
 
 
 @admin.register(Producto)
