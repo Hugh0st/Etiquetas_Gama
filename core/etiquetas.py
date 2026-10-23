@@ -50,9 +50,12 @@ def _con_unidad(valor, unidad):
 
 def valores_renglon(pedido, renglon):
     """Arma el diccionario de las 11 leyendas para un renglón del pedido."""
-    cliente = pedido.cliente
     return {
-        'vendido_a': cliente.razon_social or cliente.nombre_corto,
+        # Del snapshot si el pedido ya se emitió, igual que el certificado. Si
+        # se leyera el cliente del catálogo, reimprimir las etiquetas de un
+        # pedido ya entregado podría sacar una razón social distinta a la que
+        # dice su propio certificado.
+        'vendido_a': pedido.nombre_cliente_impresion,
         # La del renglón, no la del catálogo: si alguien corrige el catálogo
         # después, las etiquetas de este pedido siguen diciendo lo mismo.
         'producto': renglon.descripcion_impresion,

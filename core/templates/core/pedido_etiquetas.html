@@ -6,7 +6,8 @@
     <a class="boton" href="{% url 'pedido_detail' pedido.pk %}">Volver al pedido</a>
 </div>
 
-<p>Cliente: {{ pedido.cliente.codigo }} — {{ pedido.cliente.razon_social|default:pedido.cliente.nombre_corto }}</p>
+{# Del snapshot si ya se emitió: es lo que va a salir impreso en la etiqueta. #}
+<p>Cliente: {{ pedido.datos_cliente.codigo }} — {{ pedido.nombre_cliente_impresion }}</p>
 
 <p class="aviso aviso-fuerte">
     Imprime este PDF al <strong>100% de escala</strong>, sin usar la opción "ajustar a página"

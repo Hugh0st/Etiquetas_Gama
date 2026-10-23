@@ -6,7 +6,8 @@
     <a class="boton" href="{% url 'pedido_detail' pedido.pk %}">Volver al pedido</a>
 </div>
 
-<p>Cliente: {{ pedido.cliente.codigo }} — {{ pedido.cliente.razon_social|default:pedido.cliente.nombre_corto }}</p>
+{# Del snapshot si ya se emitió: la pantalla debe decir lo mismo que el certificado. #}
+<p>Cliente: {{ pedido.datos_cliente.codigo }} — {{ pedido.nombre_cliente_impresion }}</p>
 
 {% if solo_lectura %}
 <p class="aviso">Este pedido ya fue emitido; los resultados se muestran de solo lectura.</p>

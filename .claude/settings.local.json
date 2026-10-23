@@ -47,7 +47,11 @@
       "PowerShell(node --check \".\\\\core\\\\static\\\\core\\\\pedidos.js\")",
       "PowerShell(& \".\\\\venv\\\\Scripts\\\\python.exe\" manage.py test core.tests_humo2 -v 2 2>&1)",
       "PowerShell(& \".\\\\venv\\\\Scripts\\\\python.exe\" \"C:\\\\Users\\\\hugoc\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-hugoc-Desktop-Esencias-Gama-EtiquetasGama\\\\b36b9d1e-33ba-4f6c-831f-ea6b4e821c0a\\\\scratchpad\\\\validar_regla_catalogo.py\")",
-      "PowerShell(node \"C:\\\\Users\\\\hugoc\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-hugoc-Desktop-Esencias-Gama-EtiquetasGama\\\\b36b9d1e-33ba-4f6c-831f-ea6b4e821c0a\\\\scratchpad\\\\sim_aviso.js\")"
+      "PowerShell(node \"C:\\\\Users\\\\hugoc\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-hugoc-Desktop-Esencias-Gama-EtiquetasGama\\\\b36b9d1e-33ba-4f6c-831f-ea6b4e821c0a\\\\scratchpad\\\\sim_aviso.js\")",
+      "PowerShell(& \".\\\\venv\\\\Scripts\\\\python.exe\" \"C:\\\\Users\\\\hugoc\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-hugoc-Desktop-Esencias-Gama-EtiquetasGama\\\\b36b9d1e-33ba-4f6c-831f-ea6b4e821c0a\\\\scratchpad\\\\inspeccionar_especificaciones.py\")",
+      "PowerShell(& \".\\\\venv\\\\Scripts\\\\python.exe\" \"C:\\\\Users\\\\hugoc\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-hugoc-Desktop-Esencias-Gama-EtiquetasGama\\\\b36b9d1e-33ba-4f6c-831f-ea6b4e821c0a\\\\scratchpad\\\\verificar_hipotesis.py\")",
+      "PowerShell(& \".\\\\venv\\\\Scripts\\\\python.exe\" \"C:\\\\Users\\\\hugoc\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-hugoc-Desktop-Esencias-Gama-EtiquetasGama\\\\b36b9d1e-33ba-4f6c-831f-ea6b4e821c0a\\\\scratchpad\\\\contar_marcado.py\")",
+      "PowerShell(& \".\\\\venv\\\\Scripts\\\\python.exe\" \"C:\\\\Users\\\\hugoc\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-hugoc-Desktop-Esencias-Gama-EtiquetasGama\\\\b36b9d1e-33ba-4f6c-831f-ea6b4e821c0a\\\\scratchpad\\\\e7000_detalle.py\")"
     ]
   }
 }

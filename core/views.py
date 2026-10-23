@@ -207,15 +207,19 @@ def pedido_resultados(request, pk):
             messages.info(request, 'Este pedido ya fue emitido; los resultados no se pueden modificar.')
             return redirect('pedido_detail', pk=pedido.pk)
 
+        # Aquí lineas_especificacion siempre devuelve las del catálogo: este
+        # bloque solo corre si el pedido no está emitido, y un pedido sin
+        # emitir no tiene snapshot. Se usa la misma propiedad que al mostrar
+        # para no tener dos ideas distintas de cuáles son las líneas.
         with transaction.atomic():
             for renglon in renglones:
-                for linea in renglon.producto.especificacion.all():
-                    if linea.es_continuacion:
+                for linea in renglon.lineas_especificacion:
+                    if linea['es_continuacion']:
                         continue
-                    campo = f'resultado-{renglon.id}-{linea.orden}'
+                    campo = f'resultado-{renglon.id}-{linea["orden"]}'
                     texto = request.POST.get(campo, '').strip()
                     ResultadoLaboratorio.objects.update_or_create(
-                        renglon=renglon, orden=linea.orden,
+                        renglon=renglon, orden=linea['orden'],
                         defaults={'texto': texto},
                     )
         messages.success(request, 'Resultados guardados.')
@@ -224,8 +228,8 @@ def pedido_resultados(request, pk):
     for renglon in renglones:
         existentes = {r.orden: r.texto for r in renglon.resultados.all()}
         renglon.filas_resultado = [
-            {'linea': linea, 'texto': existentes.get(linea.orden, '')}
-            for linea in renglon.producto.especificacion.all()
+            {'linea': linea, 'texto': existentes.get(linea['orden'], '')}
+            for linea in renglon.lineas_especificacion
         ]
 
     return render(request, 'core/pedido_resultados.html', {

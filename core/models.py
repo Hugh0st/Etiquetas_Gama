@@ -251,6 +251,28 @@ class Pedido(models.Model):
         return f'Pedido {self.folio or f"(borrador {self.id})"} - {self.cliente_id}'
 
     @property
+    def datos_cliente(self):
+        """Los datos del cliente que le tocan a ESTE pedido.
+
+        Un pedido emitido lee del snapshot congelado al emitirlo; uno en curso,
+        del catálogo. Así una etiqueta reimpresa de un pedido ya entregado sigue
+        diciendo lo mismo aunque después se corrija el cliente en Catálogos.
+
+        Las claves pueden faltar en un snapshot viejo, así que quien lo use
+        debe hacerlo con .get().
+        """
+        if self.cliente_snapshot is not None:
+            return self.cliente_snapshot
+        return self.cliente.a_snapshot()
+
+    @property
+    def nombre_cliente_impresion(self):
+        """El nombre del cliente tal como va impreso, con el mismo criterio
+        en el certificado y en la etiqueta."""
+        datos = self.datos_cliente
+        return datos.get('razon_social') or datos.get('nombre_corto') or ''
+
+    @property
     def tiene_resultados(self):
         return ResultadoLaboratorio.objects.filter(renglon__pedido=self).exclude(texto='').exists()
 
@@ -329,7 +351,15 @@ class Pedido(models.Model):
                             }
                             for linea in renglon.producto.especificacion.all()
                         ]
-                        renglon.save(update_fields=['especificacion_snapshot'])
+                        # La descripción también se congela aquí. Si el renglón
+                        # la tiene vacía, descripcion_impresion cae al catálogo,
+                        # y entonces un pedido ya entregado cambiaría de nombre
+                        # si alguien corrige ese producto después. Copiarla en
+                        # este instante no cambia lo que se imprime hoy: es el
+                        # mismo valor al que caería el respaldo.
+                        if not renglon.descripcion:
+                            renglon.descripcion = renglon.producto.descripcion
+                        renglon.save(update_fields=['especificacion_snapshot', 'descripcion'])
                 return
             except IntegrityError:
                 continue
@@ -360,6 +390,50 @@ class RenglonPedido(models.Model):
 
     class Meta:
         ordering = ['pedido', 'id']
+
+    @property
+    def lineas_especificacion(self):
+        """Las líneas de especificación que le toca mostrar a ESTE renglón.
+
+        Un renglón congelado lee del snapshot que se guardó al emitir; uno en
+        curso, del catálogo. Así la pantalla de resultados muestra exactamente
+        lo mismo que el certificado, y corregir el catálogo no altera un pedido
+        que ya se entregó al cliente.
+
+        Que el snapshot exista (aunque sea una lista vacía) es la señal de que
+        el renglón está congelado: solo Pedido.emitir() lo escribe, y un pedido
+        emitido ya no se puede editar. Una lista vacía significa "este producto
+        no tenía especificación al emitir", no "búscala en el catálogo", igual
+        que lo interpreta el certificado.
+
+        Devuelve diccionarios con la misma forma en los dos casos, la del
+        snapshot, para que quien los use no tenga que saber de dónde salieron.
+        Los snapshots viejos pueden no traer todas las claves, así que se
+        rellenan.
+        """
+        if self.especificacion_snapshot is not None:
+            return [
+                {
+                    'orden': linea.get('orden'),
+                    'texto': linea.get('texto') or '',
+                    'es_continuacion': linea.get('es_continuacion', False),
+                    'tipo_continuacion': (
+                        linea.get('tipo_continuacion')
+                        or LineaEspecificacion.TIPO_CONTINUACION_PARAMETROS
+                    ),
+                }
+                for linea in self.especificacion_snapshot
+            ]
+
+        return [
+            {
+                'orden': linea.orden,
+                'texto': linea.texto,
+                'es_continuacion': linea.es_continuacion,
+                'tipo_continuacion': linea.tipo_continuacion,
+            }
+            for linea in self.producto.especificacion.all()
+        ]
 
     @property
     def descripcion_impresion(self):

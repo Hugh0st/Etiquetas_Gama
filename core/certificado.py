@@ -347,13 +347,14 @@ def _pie_pagina(nombre_control_calidad, styles):
 # Ensamblado del documento
 # ----------------------------------------------------------------------
 def _story_renglon(pedido, renglon, styles):
-    cliente_snapshot = pedido.cliente_snapshot or {}
-    cliente_nombre = cliente_snapshot.get('razon_social') or cliente_snapshot.get('nombre_corto', '')
+    # Un solo criterio de qué cliente y qué especificación le tocan a este
+    # pedido, compartido con la pantalla de resultados y con las etiquetas.
+    cliente_nombre = pedido.nombre_cliente_impresion
 
     config = Configuracion.obtener()
     texto_almacenamiento = config.texto_almacenamiento or TEXTO_ALMACENAMIENTO_DEFECTO
 
-    especificacion = renglon.especificacion_snapshot or []
+    especificacion = renglon.lineas_especificacion
     resultados_por_orden = {r.orden: r.texto for r in renglon.resultados.all()}
 
     story = [

@@ -53,7 +53,8 @@
 
 <dl class="detalle-encabezado">
     <dt>Cliente</dt>
-    <dd>{{ pedido.cliente.codigo }} — {{ pedido.cliente.razon_social|default:pedido.cliente.nombre_corto }}</dd>
+    {# Del snapshot si ya se emitió: la pantalla debe decir lo mismo que el certificado. #}
+    <dd>{{ pedido.datos_cliente.codigo }} — {{ pedido.nombre_cliente_impresion }}</dd>
     <dt>Fecha</dt>
     <dd>{{ pedido.fecha|date:'d/m/Y' }}</dd>
     <dt>Creado por</dt>

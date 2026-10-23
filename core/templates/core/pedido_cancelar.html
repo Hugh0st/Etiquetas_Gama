@@ -17,7 +17,8 @@
 
     <dl class="detalle-encabezado confirmacion-datos">
         <dt>Cliente</dt>
-        <dd><strong>{{ pedido.cliente.razon_social|default:pedido.cliente.nombre_corto }}</strong> ({{ pedido.cliente.codigo }})</dd>
+        {# Del snapshot: es el cliente que dice el certificado que se anula. #}
+        <dd><strong>{{ pedido.nombre_cliente_impresion }}</strong> ({{ pedido.datos_cliente.codigo }})</dd>
         <dt>Folio</dt>
         <dd><span class="folio">{{ pedido.folio }}</span></dd>
         <dt>Emitido el</dt>

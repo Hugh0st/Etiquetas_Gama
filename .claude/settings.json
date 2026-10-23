@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(& \".\\\\venv\\\\Scripts\\\\python.exe\" \"C:\\\\Users\\\\hugoc\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-hugoc-Desktop-Esencias-Gama-EtiquetasGama\\\\b36b9d1e-33ba-4f6c-831f-ea6b4e821c0a\\\\scratchpad\\\\revisar_casos_raros.py\")"
+    ]
+  }
+}
