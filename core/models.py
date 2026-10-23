@@ -536,10 +536,19 @@ class Pedido(models.Model):
     def emitir(self):
         """Asigna folio, congela los snapshots y marca el pedido como emitido.
 
-        El folio se calcula con la fecha de emisión (no la fecha del pedido).
+        El folio tiene formato ####-AAMM y se calcula con la fecha de emisión
+        (no la fecha del pedido). El consecutivo se reinicia cada AÑO, no cada
+        mes: el primero de enero es 0001 y de ahí sigue subiendo todo el año
+        aunque cambien los meses. El sufijo AAMM se conserva porque sirve para
+        saber en qué mes se trabajó el pedido, así que los folios de un año se
+        ven 0007-2610, 0008-2611, 0009-2611, y en enero vuelve a 0001-2701.
+
         Como SQLite no soporta bloqueo de filas real, la protección contra
         condiciones de carrera se hace reintentando ante un choque de folio
-        único (dos emisiones simultáneas no pueden terminar con el mismo).
+        único (dos emisiones simultáneas no pueden terminar con el mismo). El
+        reintento sirve porque vuelve a consultar el máximo: si el choque fue
+        porque otra emisión se adelantó, en la siguiente vuelta ese folio ya
+        entra en la cuenta y este pedido toma el número que sigue.
         """
         if self.emitido:
             return
@@ -547,20 +556,31 @@ class Pedido(models.Model):
             raise PedidoSinResultados('El pedido no tiene resultados de laboratorio capturados.')
 
         ahora = timezone.now()
-        prefijo = ahora.strftime('%y%m')
+        sufijo = ahora.strftime('%y%m')
+        anio = ahora.strftime('%y')
 
         for _ in range(10):
             try:
                 with transaction.atomic():
+                    # Todos los folios del año, sin importar el mes. El folio
+                    # tiene un solo guion, en la posición 5, así que "-AA" solo
+                    # puede aparecer ahí: basta con buscarlo contenido.
+                    #
+                    # Los pedidos cancelados cuentan: conservan su folio y su
+                    # número no se reutiliza, para no dejar huecos ni repetidos
+                    # en la numeración consecutiva.
+                    #
+                    # Ordenar por folio descendente da el consecutivo más alto
+                    # del año porque va primero y con ceros a la izquierda.
                     ultimo = (
                         Pedido.objects.select_for_update()
-                        .filter(folio__endswith=f'-{prefijo}')
+                        .filter(folio__contains=f'-{anio}')
                         .order_by('-folio')
                         .first()
                     )
                     consecutivo = int(ultimo.folio[:4]) + 1 if ultimo else 1
 
-                    self.folio = f'{consecutivo:04d}-{prefijo}'
+                    self.folio = f'{consecutivo:04d}-{sufijo}'
                     self.fecha_emision = ahora
                     self.emitido = True
                     self.cliente_snapshot = self.cliente.a_snapshot()
@@ -914,6 +934,15 @@ class Configuracion(models.Model):
     offset_y = models.FloatField(default=0.0)
     texto_almacenamiento = models.TextField(blank=True)
     nombre_control_calidad = models.CharField(max_length=255, default='FERNANDO CARDOSO')
+    # Datos de la empresa que van impresos. Viven aquí y no en el código para
+    # poder corregirlos sin tocar nada: un RFC cambia por razones de papeleo,
+    # no de programa.
+    rfc_empresa = models.CharField(
+        max_length=20,
+        default='EGA250314FK4',
+        blank=True,
+        help_text='RFC que se imprime bajo el nombre de la empresa en el certificado.',
+    )
 
     class Meta:
         verbose_name = 'Configuración'

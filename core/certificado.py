@@ -109,12 +109,20 @@ def numero_a_letras(n):
 def _construir_estilos():
     return {
         'titulo': ParagraphStyle('titulo', fontName='Helvetica-Bold', fontSize=19, leading=21),
+        # Subtítulo del nombre de la empresa: chico y tenue, para identificar
+        # sin competir con el nombre.
+        'rfc_empresa': ParagraphStyle(
+            'rfc_empresa', fontName='Helvetica-Bold', fontSize=8, leading=10,
+            textColor=COLOR_GRIS, spaceBefore=0.8 * mm,
+        ),
         'subtitulo_certificado': ParagraphStyle(
             'subtitulo_certificado', fontName='Helvetica-Bold', fontSize=13, leading=15,
             alignment=TA_CENTER, textColor=COLOR_ACENTO, spaceBefore=1.5 * mm, spaceAfter=1.5 * mm,
         ),
         'aviso_uso': ParagraphStyle(
-            'aviso_uso', fontName='Helvetica-Oblique', fontSize=6.5, leading=8,
+            # BoldOblique y no Bold: conserva la cursiva que ya tenía, solo
+            # sube el peso.
+            'aviso_uso', fontName='Helvetica-BoldOblique', fontSize=6.5, leading=8,
             alignment=TA_CENTER, textColor=colors.HexColor('#5c574e'),
         ),
         'folio_valor': ParagraphStyle('folio_valor', fontName='Helvetica-Bold', fontSize=14, alignment=TA_RIGHT, leading=16),
@@ -158,13 +166,18 @@ def _dividir_parametro_especificacion(texto):
 # ----------------------------------------------------------------------
 # Bloques del documento
 # ----------------------------------------------------------------------
-def _tabla_encabezado(folio, styles):
+def _tabla_encabezado(folio, rfc_empresa, styles):
     if os.path.exists(LOGO_PATH):
         logo = Image(LOGO_PATH, width=22 * mm, height=22 * mm)
     else:
         logo = Spacer(22 * mm, 22 * mm)
 
-    titulo = Paragraph('ESENCIAS GAMA', styles['titulo'])
+    # El nombre y el RFC van apilados en la misma celda: una celda de tabla de
+    # Platypus acepta una lista de flowables, así que no hace falta una tabla
+    # anidada solo para poner dos renglones.
+    titulo = [Paragraph('ESENCIAS GAMA', styles['titulo'])]
+    if rfc_empresa:
+        titulo.append(Paragraph(f'RFC: {escape(rfc_empresa)}', styles['rfc_empresa']))
 
     folio_parrafo = Paragraph(
         f'<font size="6.5">FOLIO</font><br/><font size="14"><b>{escape(folio)}</b></font>',
@@ -358,7 +371,7 @@ def _story_renglon(pedido, renglon, styles):
     resultados_por_orden = {r.orden: r.texto for r in renglon.resultados.all()}
 
     story = [
-        _tabla_encabezado(pedido.folio, styles),
+        _tabla_encabezado(pedido.folio, config.rfc_empresa, styles),
         Paragraph('CERTIFICADO DE ANÁLISIS', styles['subtitulo_certificado']),
         Paragraph(
             'EL USO Y LA APLICACIÓN SON RESPONSABILIDAD EXCLUSIVA DEL CLIENTE',
