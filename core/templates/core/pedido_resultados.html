@@ -20,7 +20,7 @@
         {# La del renglón: es la que va a salir en el certificado #}
         <h2>{{ renglon.producto.modelo }} — {{ renglon.descripcion_impresion }}</h2>
 
-        {% if renglon.filas_resultado %}
+        {% if renglon.filas %}
         <table class="tabla tabla-resultados">
             <thead>
                 <tr>
@@ -29,7 +29,7 @@
                 </tr>
             </thead>
             <tbody>
-                {% for fila in renglon.filas_resultado %}
+                {% for fila in renglon.filas %}
                 <tr class="{% if fila.linea.es_continuacion %}fila-continuacion{% endif %}">
                     <td class="especificacion">{{ fila.linea.texto }}</td>
                     <td>
@@ -38,7 +38,8 @@
                         {% elif solo_lectura %}
                         {{ fila.texto }}
                         {% else %}
-                        <input type="text" name="resultado-{{ renglon.id }}-{{ fila.linea.orden }}" value="{{ fila.texto }}">
+                        {# Por la línea, no por su posición: reordenar no mueve nada. #}
+                        <input type="text" name="resultado-{{ renglon.id }}-{{ fila.linea.id }}" value="{{ fila.texto }}">
                         {% endif %}
                     </td>
                 </tr>
@@ -47,6 +48,21 @@
         </table>
         {% else %}
         <p class="aviso">Este producto no tiene especificación registrada.</p>
+        {% endif %}
+
+        {% if not solo_lectura %}
+        {% comment %}
+        Entrada al editor de especificación. Es un submit de este mismo
+        formulario, con su propio name, no un enlace: así los resultados que el
+        usuario lleve escritos se guardan antes de salir y no se pierde captura.
+        {% endcomment %}
+        <div class="pie-renglon">
+            <button type="submit" name="corregir_especificacion" value="{{ renglon.id }}"
+                    class="boton-corregir-espec">
+                ¿Hay un error en la especificación? Corregirla
+            </button>
+            <span class="nota-corregir">Guarda los resultados y abre el editor del catálogo.</span>
+        </div>
         {% endif %}
     </div>
     {% endfor %}

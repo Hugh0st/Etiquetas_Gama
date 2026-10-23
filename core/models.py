@@ -1,3 +1,6 @@
+import hashlib
+import json
+
 from django.conf import settings
 from django.db import IntegrityError, models, transaction
 from django.utils import timezone
@@ -153,6 +156,213 @@ class Producto(models.Model):
                 ),
             )
 
+    # ------------------------------------------------------------------
+    # Especificación
+    # ------------------------------------------------------------------
+    def lineas_frescas(self):
+        """Las líneas del catálogo leídas de la base, sin pasar por la caché.
+
+        A propósito no se usa self.especificacion.all(): si alguien cargó el
+        producto con prefetch_related('especificacion'), eso devolvería la
+        copia en memoria, y el editor estaría decidiendo sobre una foto vieja
+        justo mientras la reescribe.
+        """
+        return LineaEspecificacion.objects.filter(producto=self).order_by('orden')
+
+    def especificacion_a_lista(self):
+        """La especificación del catálogo con la misma forma que el snapshot."""
+        return [
+            {
+                'linea_id': linea.pk,
+                'orden': linea.orden,
+                'texto': linea.texto,
+                'es_continuacion': linea.es_continuacion,
+                'tipo_continuacion': linea.tipo_continuacion,
+            }
+            for linea in self.lineas_frescas()
+        ]
+
+    def hash_especificacion(self):
+        """Huella de la especificación tal como está ahora.
+
+        Se manda en la pantalla de edición y se vuelve a calcular al guardar:
+        si alguien más la cambió mientras esa pantalla estaba abierta, el
+        guardado se rechaza en vez de pisar su trabajo sin avisar. Cualquier
+        usuario puede editar, así que dos personas sobre el mismo producto no
+        es hipotético.
+        """
+        crudo = json.dumps(self.especificacion_a_lista(), sort_keys=True, ensure_ascii=False)
+        return hashlib.sha256(crudo.encode('utf-8')).hexdigest()[:16]
+
+    def analizar_cambio_especificacion(self, filas):
+        """Qué resultados ya capturados se llevaría consigo este cambio.
+
+        Solo mira pedidos en curso. Los resultados de un pedido emitido están
+        desatados de su línea (linea=NULL) desde el momento de emitir, así que
+        filtrar por línea los excluye solo: un cambio en el catálogo no puede
+        alcanzar un documento ya entregado.
+
+        Devuelve (destructivos, vacios):
+          destructivos  líneas con resultados que tienen texto capturado; hay
+                        que confirmar antes de aplicar
+          vacios        líneas cuyos resultados están en blanco; se borran sin
+                        preguntar, porque no se pierde nada
+        """
+        ids_que_quedan = {f['id'] for f in filas if f['id']}
+        ids_vueltas_continuacion = {
+            f['id'] for f in filas if f['id'] and f['es_continuacion']
+        }
+
+        afectadas = []
+        for linea in self.lineas_frescas():
+            if linea.pk not in ids_que_quedan:
+                afectadas.append((linea, 'borrada'))
+            elif linea.pk in ids_vueltas_continuacion and not linea.es_continuacion:
+                # Una continuación no lleva resultado propio, así que marcarla
+                # deja huérfano lo que ya se había capturado. Mismo trato que
+                # borrarla, aunque la línea siga ahí.
+                afectadas.append((linea, 'continuacion'))
+
+        destructivos, vacios = [], []
+        for linea, motivo in afectadas:
+            resultados = list(
+                ResultadoLaboratorio.objects
+                .filter(linea=linea, renglon__pedido__emitido=False)
+                .select_related('renglon__pedido')
+            )
+            if not resultados:
+                continue
+
+            con_texto = [r for r in resultados if r.texto.strip()]
+            afectados = con_texto or resultados
+            aviso = {
+                'linea_id': linea.pk,
+                'texto': linea.texto,
+                'motivo': motivo,
+                'resultados': len(afectados),
+                'pedidos': sorted({
+                    r.renglon.pedido.folio or f'borrador #{r.renglon.pedido_id}'
+                    for r in afectados
+                }),
+            }
+            (destructivos if con_texto else vacios).append(aviso)
+
+        return destructivos, vacios
+
+    def aplicar_especificacion(self, filas, usuario, pedido=None, confirmado=False, huella=None):
+        """Reescribe la especificación del catálogo y deja registro.
+
+        `filas` viene en el orden deseado, cada una con id (None si es nueva),
+        texto, es_continuacion y tipo_continuacion. Las líneas se renumeran
+        1..N según ese orden.
+
+        Levanta EspecificacionCambiadaPorOtro si `huella` ya no corresponde, y
+        EspecificacionDestruyeResultados si el cambio se llevaría resultados
+        con texto y `confirmado` es falso.
+        """
+        if huella is not None and huella != self.hash_especificacion():
+            raise EspecificacionCambiadaPorOtro()
+
+        # Los "vacios" no se consultan aquí a propósito: sus resultados están
+        # en blanco, así que se borran sin preguntar junto con su línea. El
+        # análisis los separa para poder mostrarlos en la pantalla.
+        destructivos, _ = self.analizar_cambio_especificacion(filas)
+        if destructivos and not confirmado:
+            raise EspecificacionDestruyeResultados(destructivos)
+
+        with transaction.atomic():
+            anterior = self.especificacion_a_lista()
+            existentes = {linea.pk: linea for linea in self.lineas_frescas()}
+            ids_que_quedan = {f['id'] for f in filas if f['id']}
+
+            borradas = [linea for pk, linea in existentes.items() if pk not in ids_que_quedan]
+            vueltas_continuacion = [
+                existentes[f['id']] for f in filas
+                if f['id'] and f['es_continuacion'] and not existentes[f['id']].es_continuacion
+            ]
+
+            # Los resultados se borran antes que su línea: el FK es PROTECT a
+            # propósito, para que nada se lleve un resultado por accidente.
+            a_limpiar = [l.pk for l in borradas] + [l.pk for l in vueltas_continuacion]
+            eliminados, pedidos_afectados = self._borrar_resultados_de(a_limpiar)
+
+            for linea in borradas:
+                linea.delete()
+
+            # Renumeración en dos fases. UniqueConstraint(producto, orden) hace
+            # que mover una línea al lugar de otra choque, así que primero
+            # todas se van a órdenes negativos, que nadie más usa, y de ahí al
+            # definitivo.
+            for i, linea in enumerate(existentes.values()):
+                if linea.pk in ids_que_quedan:
+                    LineaEspecificacion.objects.filter(pk=linea.pk).update(orden=-(i + 1))
+
+            for posicion, fila in enumerate(filas, start=1):
+                tipo = fila['tipo_continuacion'] if fila['es_continuacion'] else ''
+                if fila['id']:
+                    LineaEspecificacion.objects.filter(pk=fila['id']).update(
+                        orden=posicion,
+                        texto=fila['texto'],
+                        es_continuacion=fila['es_continuacion'],
+                        tipo_continuacion=tipo,
+                    )
+                else:
+                    LineaEspecificacion.objects.create(
+                        producto=self,
+                        orden=posicion,
+                        texto=fila['texto'],
+                        es_continuacion=fila['es_continuacion'],
+                        tipo_continuacion=tipo,
+                    )
+
+            # El orden de cada resultado se mantiene igual al de su línea: es
+            # la copia que se congela al emitir y la que lee el certificado.
+            # Los resultados de pedidos emitidos tienen linea=NULL, así que
+            # este barrido no los toca.
+            for linea in self.lineas_frescas():
+                ResultadoLaboratorio.objects.filter(linea=linea).exclude(
+                    orden=linea.orden
+                ).update(orden=linea.orden)
+
+            return CorreccionEspecificacionProducto.objects.create(
+                producto=self,
+                usuario=usuario,
+                pedido=pedido,
+                origen=(
+                    CorreccionEspecificacionProducto.ORIGEN_PEDIDO if pedido
+                    else CorreccionEspecificacionProducto.ORIGEN_CATALOGO
+                ),
+                especificacion_anterior=anterior,
+                especificacion_nueva=self.especificacion_a_lista(),
+                resultados_eliminados=eliminados,
+                pedidos_afectados=', '.join(pedidos_afectados),
+            )
+
+    @staticmethod
+    def _borrar_resultados_de(ids_linea):
+        """Borra los resultados atados a esas líneas y dice a quién tocó.
+
+        Devuelve (cuántos, lista de pedidos). Solo alcanza pedidos en curso:
+        los emitidos tienen sus resultados desatados.
+        """
+        if not ids_linea:
+            return 0, []
+
+        resultados = list(
+            ResultadoLaboratorio.objects
+            .filter(linea_id__in=ids_linea)
+            .select_related('renglon__pedido')
+        )
+        if not resultados:
+            return 0, []
+
+        pedidos = sorted({
+            r.renglon.pedido.folio or f'borrador #{r.renglon.pedido_id}'
+            for r in resultados
+        })
+        ResultadoLaboratorio.objects.filter(pk__in=[r.pk for r in resultados]).delete()
+        return len(resultados), pedidos
+
 
 class LineaEspecificacion(models.Model):
     TIPO_CONTINUACION_PARAMETROS = 'parametros'
@@ -185,6 +395,21 @@ class LineaEspecificacion(models.Model):
 
     def __str__(self):
         return f'{self.producto_id} [{self.orden}] {self.texto}'
+
+
+class EspecificacionCambiadaPorOtro(Exception):
+    """Alguien más cambió la especificación mientras esta pantalla estaba abierta."""
+
+
+class EspecificacionDestruyeResultados(Exception):
+    """El cambio se llevaría resultados ya capturados y falta confirmarlo.
+
+    Lleva en `impacto` la lista de lo que se perdería, para poder mostrarla.
+    """
+
+    def __init__(self, impacto):
+        self.impacto = impacto
+        super().__init__('El cambio eliminaría resultados de laboratorio ya capturados.')
 
 
 class PedidoSinResultados(Exception):
@@ -342,15 +567,7 @@ class Pedido(models.Model):
                     self.save()
 
                     for renglon in self.renglones.select_related('producto'):
-                        renglon.especificacion_snapshot = [
-                            {
-                                'orden': linea.orden,
-                                'texto': linea.texto,
-                                'es_continuacion': linea.es_continuacion,
-                                'tipo_continuacion': linea.tipo_continuacion,
-                            }
-                            for linea in renglon.producto.especificacion.all()
-                        ]
+                        renglon.especificacion_snapshot = renglon.producto.especificacion_a_lista()
                         # La descripción también se congela aquí. Si el renglón
                         # la tiene vacía, descripcion_impresion cae al catálogo,
                         # y entonces un pedido ya entregado cambiaría de nombre
@@ -360,6 +577,13 @@ class Pedido(models.Model):
                         if not renglon.descripcion:
                             renglon.descripcion = renglon.producto.descripcion
                         renglon.save(update_fields=['especificacion_snapshot', 'descripcion'])
+
+                        # Se desatan los resultados de la línea del catálogo,
+                        # conservando su orden. A partir de aquí el pedido es
+                        # autocontenido: el snapshot y el orden lo dicen todo,
+                        # y editar o borrar una línea del catálogo ya no puede
+                        # alcanzar un documento que se entregó al cliente.
+                        renglon.resultados.update(linea=None)
                 return
             except IntegrityError:
                 continue
@@ -414,6 +638,9 @@ class RenglonPedido(models.Model):
         if self.especificacion_snapshot is not None:
             return [
                 {
+                    # Los snapshots escritos antes del FK no traen linea_id.
+                    # No importa: un renglón congelado empareja por orden.
+                    'id': linea.get('linea_id'),
                     'orden': linea.get('orden'),
                     'texto': linea.get('texto') or '',
                     'es_continuacion': linea.get('es_continuacion', False),
@@ -427,12 +654,41 @@ class RenglonPedido(models.Model):
 
         return [
             {
+                'id': linea.pk,
                 'orden': linea.orden,
                 'texto': linea.texto,
                 'es_continuacion': linea.es_continuacion,
                 'tipo_continuacion': linea.tipo_continuacion,
             }
             for linea in self.producto.especificacion.all()
+        ]
+
+    def filas_resultado(self):
+        """Las líneas de este renglón, cada una con el resultado que le toca.
+
+        El emparejamiento cambia según el renglón esté congelado o en curso, y
+        esa es justo la razón de que viva aquí y no en la vista:
+
+        - En curso: por la LÍNEA. Es el vínculo real, así que reordenar o
+          insertar en el catálogo no desalinea nada.
+        - Congelado: por el ORDEN. Al emitir, los resultados se desatan de la
+          línea (linea=NULL) y lo único que los une al snapshot es el orden,
+          que quedó guardado junto a él. Es el mismo criterio que usa el
+          certificado.
+        """
+        lineas = self.lineas_especificacion
+        resultados = self.resultados.all()
+
+        if self.especificacion_snapshot is not None:
+            por_clave = {r.orden: r.texto for r in resultados}
+            claves = [linea['orden'] for linea in lineas]
+        else:
+            por_clave = {r.linea_id: r.texto for r in resultados}
+            claves = [linea['id'] for linea in lineas]
+
+        return [
+            {'linea': linea, 'texto': por_clave.get(clave, '')}
+            for linea, clave in zip(lineas, claves)
         ]
 
     @property
@@ -457,13 +713,46 @@ class RenglonPedido(models.Model):
 
 class ResultadoLaboratorio(models.Model):
     renglon = models.ForeignKey(RenglonPedido, on_delete=models.CASCADE, related_name='resultados')
+
+    # A qué línea de especificación corresponde este resultado.
+    #
+    # El vínculo es la IDENTIDAD de la línea, no su posición. Antes era el
+    # campo `orden`, y con eso reordenar la especificación dejaba cada
+    # resultado pegado a una posición: un valor acababa impreso bajo otro
+    # parámetro, en un certificado de análisis, sin que nada avisara. Con el
+    # FK, reordenar solo reescribe `orden` en las líneas y los resultados no
+    # se mueven, porque nunca estuvieron atados a un lugar.
+    #
+    # PROTECT a propósito: borrar una línea con resultados capturados no debe
+    # poder pasar de lado. El editor calcula el impacto y pide confirmación,
+    # y borra los resultados explícitamente antes de la línea.
+    #
+    # Queda en NULL en dos casos: un pedido emitido (Pedido.emitir() los
+    # desata para que el documento sea autocontenido y ningún cambio del
+    # catálogo lo pueda alcanzar) y un resultado heredado al que la migración
+    # 0019 no le encontró línea.
+    linea = models.ForeignKey(
+        LineaEspecificacion,
+        on_delete=models.PROTECT,
+        related_name='resultados',
+        null=True,
+        blank=True,
+    )
+
+    # Copia del orden de la línea, sincronizada mientras el resultado está
+    # atado. Es lo que se congela al emitir y lo que empareja el certificado
+    # contra especificacion_snapshot.
     orden = models.IntegerField()
     texto = models.CharField(max_length=500, blank=True)
 
     class Meta:
         ordering = ['renglon', 'orden']
         constraints = [
-            models.UniqueConstraint(fields=['renglon', 'orden'], name='unico_renglon_orden'),
+            # Un resultado por línea y renglón. No se usa (renglon, orden)
+            # porque la renumeración de un reordenamiento lo violaría a medio
+            # camino, y porque los resultados desatados comparten linea=NULL
+            # (los NULL no chocan entre sí en una restricción única).
+            models.UniqueConstraint(fields=['renglon', 'linea'], name='unico_renglon_linea'),
         ]
 
     def __str__(self):
@@ -526,6 +815,89 @@ class CorreccionDescripcionProducto(models.Model):
     @property
     def procedencia(self):
         """Dónde se hizo la corrección, para leerla de un vistazo en la bitácora."""
+        if self.origen == self.ORIGEN_CATALOGO:
+            return 'Catálogos'
+        if self.pedido_id is None:
+            return 'Pedido (ya eliminado)'
+        return f'Pedido {self.pedido.folio or f"borrador #{self.pedido_id}"}'
+
+
+class CorreccionEspecificacionProducto(models.Model):
+    """Bitácora de las ediciones a la especificación de un producto.
+
+    Las líneas de especificación se importaron del sistema de consola viejo y
+    la migración dejó errores: texto duplicado, continuaciones sin marcar. No
+    se revisa el catálogo completo: se corrige sobre la marcha, conforme cada
+    producto se usa, desde la pantalla de captura de resultados.
+
+    Una fila por SESIÓN de edición, no por línea: lo que el usuario hizo de un
+    jalón es una sola corrección, y agruparla así deja ver qué cambió junto.
+    Por eso el antes y el después se guardan completos, con la misma forma que
+    especificacion_snapshot, en vez de un diff línea por línea: con la foto
+    entera siempre se puede reconstruir cualquier momento y comparar dos.
+
+    Hermana de CorreccionDescripcionProducto, con las mismas convenciones para
+    que las dos bitácoras se lean igual en el admin. No se edita a mano.
+    """
+    ORIGEN_PEDIDO = 'pedido'
+    ORIGEN_CATALOGO = 'catalogo'
+    ORIGEN_CHOICES = [
+        (ORIGEN_PEDIDO, 'Captura de resultados'),
+        (ORIGEN_CATALOGO, 'Catálogos'),
+    ]
+
+    producto = models.ForeignKey(
+        Producto,
+        on_delete=models.PROTECT,
+        related_name='correcciones_especificacion',
+    )
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name='correcciones_especificacion',
+    )
+    fecha = models.DateTimeField(auto_now_add=True)
+    origen = models.CharField(max_length=10, choices=ORIGEN_CHOICES)
+    # De qué pedido salió la corrección. SET_NULL y no CASCADE porque un
+    # borrador sí se puede eliminar, y el registro no debe irse con él: el
+    # catálogo ya quedó cambiado.
+    pedido = models.ForeignKey(
+        Pedido,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='correcciones_especificacion',
+    )
+
+    especificacion_anterior = models.JSONField()
+    especificacion_nueva = models.JSONField()
+
+    # Cuántos resultados de laboratorio se llevó el cambio y de qué pedidos.
+    # Una edición destructiva tiene que quedar rastreable: es lo único de esta
+    # bitácora que no se puede reconstruir del antes y el después.
+    resultados_eliminados = models.IntegerField(default=0)
+    pedidos_afectados = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-fecha']
+        verbose_name = 'Corrección de especificación'
+        verbose_name_plural = 'Correcciones de especificación'
+
+    def __str__(self):
+        return f'{self.producto_id}: {self.resumen}'
+
+    @property
+    def resumen(self):
+        """Cuántas líneas había antes y cuántas quedaron."""
+        antes = len(self.especificacion_anterior or [])
+        despues = len(self.especificacion_nueva or [])
+        # Con flecha ASCII y no →: __str__ usa esto, y una consola de
+        # Windows en cp1252 no puede imprimir ese caracter.
+        return f'{antes} líneas -> {despues} líneas'
+
+    @property
+    def procedencia(self):
+        """Dónde se hizo la corrección, para leerla de un vistazo."""
         if self.origen == self.ORIGEN_CATALOGO:
             return 'Catálogos'
         if self.pedido_id is None:

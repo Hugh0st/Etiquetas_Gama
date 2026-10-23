@@ -639,6 +639,128 @@ input[readonly] { background: var(--fondo); color: var(--tinta-2); }
 .tabla-resultados tr.fila-continuacion td { border-top: none; }
 .tabla-resultados .sin-captura { color: var(--linea-2); }
 
+/* Entrada al editor de especificación: discreta, porque lo normal es venir a
+   capturar resultados y no a corregir el catálogo. */
+.pie-renglon { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+.boton-corregir-espec {
+    background: none;
+    border: 1px dashed var(--pendiente-linea);
+    color: var(--pendiente-fg);
+    border-radius: var(--radio-sm);
+    padding: 5px 11px;
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+}
+.boton-corregir-espec:hover { background: var(--alerta-bg); border-style: solid; }
+.nota-corregir { font-size: 12.5px; color: var(--tinta-3); }
+
+/* --- 5.8 Editor de especificación ---------------------------------------
+   Cromo en ámbar: esta pantalla cambia el CATÁLOGO, no un pedido. Tiene que
+   verse distinta de la captura de resultados para no confundirlas. */
+.aviso-edicion {
+    background: var(--alerta-bg);
+    border: 1px solid var(--alerta-bd);
+    border-left-width: 5px;
+    border-radius: var(--radio);
+    padding: 14px 18px;
+    margin-bottom: 18px;
+}
+.aviso-edicion h2 { font-size: 16px; margin: 0 0 8px; }
+.aviso-edicion p { margin: 0 0 6px; font-size: 13.5px; color: var(--tinta-2); max-width: 90ch; }
+.aviso-edicion p:last-child { margin-bottom: 0; }
+.aviso-edicion-alcance { color: var(--pendiente-fg); }
+
+.aviso-destructivo {
+    background: var(--peligro-bg);
+    border: 1px solid var(--peligro-bd);
+    border-left-width: 5px;
+    border-radius: var(--radio);
+    padding: 14px 18px;
+    margin-bottom: 18px;
+}
+.aviso-destructivo h2 { font-size: 16px; margin: 0 0 8px; color: var(--peligro-oscuro); }
+.aviso-destructivo p { margin: 0 0 8px; font-size: 13.5px; color: var(--tinta-2); }
+.aviso-destructivo ul { margin: 0 0 8px; padding-left: 20px; }
+.aviso-destructivo li { margin-bottom: 8px; font-size: 13.5px; }
+.aviso-destructivo code {
+    font-family: Consolas, "Courier New", monospace;
+    white-space: pre-wrap;
+    background: var(--papel);
+    border: 1px solid var(--peligro-bd);
+    border-radius: var(--radio-sm);
+    padding: 1px 5px;
+}
+.aviso-destructivo .motivo { display: block; color: var(--tinta-3); font-size: 12.5px; }
+.aviso-destructivo .cuenta { display: block; color: var(--peligro); font-weight: 600; font-size: 12.5px; }
+.aviso-destructivo .nota { margin: 0; color: var(--tinta-3); }
+
+.tabla-especificacion { margin-bottom: 14px; }
+.tabla-especificacion td { vertical-align: top; }
+.tabla-especificacion .col-mover { width: 74px; white-space: nowrap; }
+.tabla-especificacion .col-continuacion { width: 230px; }
+.tabla-especificacion .col-resultado { width: 170px; }
+.tabla-especificacion .col-quitar { width: 70px; text-align: right; }
+
+/* La alineación con espacios es significativa: el certificado parte la línea
+   en sus dos columnas por la primera corrida de 2 o más espacios. */
+.texto-linea {
+    width: 100%;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 13px;
+}
+.linea-espec.es-continuacion .texto-linea { color: var(--tinta-3); background: var(--fondo-2); }
+
+.boton-mover {
+    background: var(--papel);
+    border: 1px solid var(--linea-2);
+    border-radius: var(--radio-sm);
+    color: var(--tinta-2);
+    cursor: pointer;
+    font-size: 13px;
+    padding: 3px 7px;
+}
+.boton-mover:hover { border-color: var(--verde-600); color: var(--verde-800); background: var(--verde-50); }
+
+.marca-continuacion {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    color: var(--tinta-2);
+    cursor: pointer;
+    margin-bottom: 5px;
+}
+.marca-continuacion input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    margin: 0;
+    flex: none;
+    accent-color: var(--verde-700);
+    cursor: pointer;
+}
+.tipo-continuacion { font-size: 12px; max-width: 100%; }
+
+.tabla-especificacion .resultado-capturado { font-size: 13.5px; }
+/* Marcado en el momento de palomear la continuación: ese resultado se va. */
+.tabla-especificacion .resultado-capturado.se-va-a-perder {
+    color: var(--peligro);
+    text-decoration: line-through;
+}
+.tabla-especificacion .sin-captura { color: var(--tinta-3); font-size: 12.5px; font-style: italic; }
+
+.quitar-linea {
+    background: none;
+    border: 1px solid var(--error-bd);
+    color: var(--error-fg);
+    border-radius: var(--radio-sm);
+    padding: 3px 9px;
+    cursor: pointer;
+    font-size: 12.5px;
+    font-family: inherit;
+}
+.quitar-linea:hover { background: var(--error-bg); }
+
 /* --- 5.4 Detalle de pedido ------------------------------------------------ */
 .detalle-encabezado {
     background: var(--papel);

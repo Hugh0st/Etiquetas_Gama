@@ -4,6 +4,7 @@ from django.contrib import admin
 from .models import (
     Cliente,
     CorreccionDescripcionProducto,
+    CorreccionEspecificacionProducto,
     LineaEspecificacion,
     Producto,
     normalizar_descripcion,
@@ -95,6 +96,44 @@ class CorreccionDescripcionProductoAdmin(admin.ModelAdmin):
     search_fields = ('producto__modelo', 'descripcion_anterior', 'descripcion_nueva')
     date_hierarchy = 'fecha'
     list_select_related = ('producto', 'usuario', 'pedido')
+
+    @admin.display(description='Se corrigió desde')
+    def procedencia(self, obj):
+        return obj.procedencia
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(CorreccionEspecificacionProducto)
+class CorreccionEspecificacionProductoAdmin(admin.ModelAdmin):
+    """Bitácora de las ediciones a la especificación de un producto.
+
+    De solo lectura, igual que la de descripciones: sirve para rastrear de
+    dónde salió una línea, no para editarla. Se escribe sola cuando alguien
+    corrige una especificación desde la captura de resultados.
+
+    El antes y el después se guardan completos, así que desde aquí se puede
+    reconstruir cómo estaba la especificación en cualquier momento.
+    """
+    list_display = (
+        'fecha', 'producto', 'resumen', 'resultados_eliminados',
+        'usuario', 'procedencia',
+    )
+    list_filter = ('origen', 'fecha', 'usuario')
+    search_fields = ('producto__modelo',)
+    date_hierarchy = 'fecha'
+    list_select_related = ('producto', 'usuario', 'pedido')
+
+    @admin.display(description='Cambio')
+    def resumen(self, obj):
+        return obj.resumen
 
     @admin.display(description='Se corrigió desde')
     def procedencia(self, obj):

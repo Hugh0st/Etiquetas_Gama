@@ -1,0 +1,172 @@
+{% extends 'core/base.html' %}
+{% load estaticos %}
+{% block titulo %}Corregir especificación de {{ producto.modelo }} — Esencias Gama{% endblock %}
+{% block content %}
+
+<div class="encabezado-lista">
+    <h1>Corregir especificación</h1>
+    <a href="{% url 'pedido_resultados' pedido.pk %}">Volver a los resultados</a>
+</div>
+
+<div class="aviso-edicion">
+    <h2>{{ producto.modelo }} — {{ renglon.descripcion_impresion }}</h2>
+    <p>
+        Esto corrige la especificación <strong>en el catálogo</strong>. No hay una versión
+        por pedido: lo que guardes aquí es lo que van a llevar todos los pedidos futuros
+        de este producto.
+    </p>
+    <p class="aviso-edicion-alcance">
+        {% if pedidos_en_curso > 1 %}
+        Este producto está en <strong>{{ pedidos_en_curso }} pedidos en curso</strong>, incluido este.
+        El cambio los afecta a todos.
+        {% else %}
+        Este producto está solo en este pedido en curso.
+        {% endif %}
+        Los pedidos ya emitidos no cambian: su especificación quedó congelada al emitirlos.
+    </p>
+</div>
+
+{% if error %}
+<ul class="errores"><li>{{ error }}</li></ul>
+{% endif %}
+
+{% if destructivos %}
+<div class="aviso-destructivo">
+    <h2>Esto va a borrar resultados ya capturados</h2>
+    <p>No se guardó nada todavía. Si continúas, se pierde lo siguiente:</p>
+    <ul>
+        {% for aviso in destructivos %}
+        <li>
+            <code>{{ aviso.texto }}</code>
+            <span class="motivo">
+                {% if aviso.motivo == 'borrada' %}
+                se borra la línea
+                {% else %}
+                se marca como continuación, y una continuación no lleva resultado
+                {% endif %}
+            </span>
+            <span class="cuenta">
+                {{ aviso.resultados }} resultado{{ aviso.resultados|pluralize }} en
+                {{ aviso.pedidos|join:", " }}
+            </span>
+        </li>
+        {% endfor %}
+    </ul>
+    <p class="nota">
+        Si no era tu intención, quita el cambio de esa línea en la lista de abajo y vuelve
+        a guardar.
+    </p>
+</div>
+{% endif %}
+
+<form method="post" id="form-especificacion">
+    {% csrf_token %}
+    <input type="hidden" name="huella" value="{{ huella }}">
+    {# El JS mantiene aquí las claves en el orden visual: es lo que el servidor lee. #}
+    <input type="hidden" name="orden" id="orden-filas" value="">
+
+    <table class="tabla tabla-especificacion">
+        <thead>
+            <tr>
+                <th class="col-mover">Orden</th>
+                <th>Texto de la línea</th>
+                <th class="col-continuacion">Continuación</th>
+                <th class="col-resultado">Resultado en este pedido</th>
+                <th class="col-quitar"></th>
+            </tr>
+        </thead>
+        <tbody id="lineas-especificacion">
+            {% for fila in filas %}
+            <tr class="linea-espec" data-clave="{{ fila.clave }}">
+                <td class="col-mover">
+                    <button type="button" class="boton-mover subir" title="Subir">&uarr;</button>
+                    <button type="button" class="boton-mover bajar" title="Bajar">&darr;</button>
+                </td>
+                <td>
+                    {% comment %}
+                    Monoespaciada: la alineación con espacios es significativa. El
+                    certificado parte la línea en sus dos columnas por la primera
+                    corrida de 2 o más espacios.
+                    {% endcomment %}
+                    <input type="text" class="texto-linea" name="texto-{{ fila.clave }}"
+                           value="{{ fila.texto }}" autocomplete="off" maxlength="500">
+                </td>
+                <td class="col-continuacion">
+                    <label class="marca-continuacion">
+                        <input type="checkbox" name="continuacion-{{ fila.clave }}"
+                               {% if fila.es_continuacion %}checked{% endif %}>
+                        <span>Es continuación</span>
+                    </label>
+                    <select name="tipo-{{ fila.clave }}" class="tipo-continuacion"
+                            {% if not fila.es_continuacion %}disabled{% endif %}>
+                        {% for valor, etiqueta in tipos_continuacion %}
+                        <option value="{{ valor }}"
+                                {% if valor == fila.tipo_continuacion %}selected{% endif %}>
+                            {{ etiqueta }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </td>
+                <td class="col-resultado">
+                    {% if fila.es_continuacion %}
+                    <span class="sin-captura" title="Una continuación no lleva resultado propio">—</span>
+                    {% elif fila.resultado %}
+                    <span class="resultado-capturado">{{ fila.resultado }}</span>
+                    {% else %}
+                    <span class="sin-captura">sin capturar</span>
+                    {% endif %}
+                </td>
+                <td class="col-quitar">
+                    <button type="button" class="quitar-linea" title="Quitar esta línea">Quitar</button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <button type="button" id="agregar-linea">+ Agregar línea</button>
+
+    <template id="linea-vacia">
+        <tr class="linea-espec" data-clave="__CLAVE__">
+            <td class="col-mover">
+                <button type="button" class="boton-mover subir" title="Subir">&uarr;</button>
+                <button type="button" class="boton-mover bajar" title="Bajar">&darr;</button>
+            </td>
+            <td>
+                <input type="text" class="texto-linea" name="texto-__CLAVE__"
+                       value="" autocomplete="off" maxlength="500">
+            </td>
+            <td class="col-continuacion">
+                <label class="marca-continuacion">
+                    <input type="checkbox" name="continuacion-__CLAVE__">
+                    <span>Es continuación</span>
+                </label>
+                <select name="tipo-__CLAVE__" class="tipo-continuacion" disabled>
+                    {% for valor, etiqueta in tipos_continuacion %}
+                    <option value="{{ valor }}">{{ etiqueta }}</option>
+                    {% endfor %}
+                </select>
+            </td>
+            <td class="col-resultado">
+                <span class="sin-captura">línea nueva</span>
+            </td>
+            <td class="col-quitar">
+                <button type="button" class="quitar-linea" title="Quitar esta línea">Quitar</button>
+            </td>
+        </tr>
+    </template>
+
+    <div class="acciones">
+        {% if destructivos %}
+        <button type="submit" name="confirmado" value="1" class="boton boton-peligro">
+            Sí, guardar y borrar esos resultados
+        </button>
+        {% else %}
+        <button type="submit" class="boton">Guardar especificación</button>
+        {% endif %}
+        <a href="{% url 'pedido_resultados' pedido.pk %}">Cancelar</a>
+    </div>
+</form>
+
+<script src="{% estatico_versionado 'core/especificacion.js' %}"></script>
+{% endblock %}

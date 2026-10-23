@@ -12,11 +12,15 @@ from .forms import ConfiguracionForm, PedidoForm, RenglonPedidoFormSet
 from .models import (
     Cliente,
     Configuracion,
+    EspecificacionCambiadaPorOtro,
+    EspecificacionDestruyeResultados,
+    LineaEspecificacion,
     MotivoCancelacionRequerido,
     Pedido,
     PedidoEmitidoNoSeElimina,
     PedidoSinResultados,
     Producto,
+    RenglonPedido,
     ResultadoLaboratorio,
 )
 from .permisos import es_admin, solo_admin  # noqa: F401  (es_admin se reexporta por comodidad)
@@ -216,26 +220,214 @@ def pedido_resultados(request, pk):
                 for linea in renglon.lineas_especificacion:
                     if linea['es_continuacion']:
                         continue
-                    campo = f'resultado-{renglon.id}-{linea["orden"]}'
+                    campo = f'resultado-{renglon.id}-{linea["id"]}'
                     texto = request.POST.get(campo, '').strip()
+                    # Se identifica por la línea, no por el orden: así un
+                    # reordenamiento posterior no mueve el resultado de lugar.
                     ResultadoLaboratorio.objects.update_or_create(
-                        renglon=renglon, orden=linea['orden'],
-                        defaults={'texto': texto},
+                        renglon=renglon, linea_id=linea['id'],
+                        defaults={'texto': texto, 'orden': linea['orden']},
                     )
+
+        # "Corregir especificación" es un submit de este mismo formulario, no
+        # un enlace: así los resultados que el usuario llevaba escritos se
+        # guardan antes de irse al editor, y no se pierde captura.
+        ir_a_especificacion = request.POST.get('corregir_especificacion', '')
+        if ir_a_especificacion.isdigit():
+            destino = next(
+                (r for r in renglones if r.id == int(ir_a_especificacion)), None,
+            )
+            if destino is not None:
+                messages.success(request, 'Resultados guardados.')
+                return redirect(
+                    'especificacion_editar', pedido_pk=pedido.pk, renglon_pk=destino.pk,
+                )
+
         messages.success(request, 'Resultados guardados.')
         return redirect('pedido_resultados', pk=pedido.pk)
 
     for renglon in renglones:
-        existentes = {r.orden: r.texto for r in renglon.resultados.all()}
-        renglon.filas_resultado = [
-            {'linea': linea, 'texto': existentes.get(linea['orden'], '')}
-            for linea in renglon.lineas_especificacion
-        ]
+        renglon.filas = renglon.filas_resultado()
 
     return render(request, 'core/pedido_resultados.html', {
         'pedido': pedido,
         'renglones': renglones,
         'solo_lectura': pedido.emitido,
+    })
+
+
+# ----------------------------------------------------------------------
+# Editor de la especificación del producto
+# ----------------------------------------------------------------------
+def _leer_filas_especificacion(datos, producto):
+    """Lee las filas del editor en el orden en que quedaron en pantalla.
+
+    El orden llega en un campo oculto con las claves separadas por comas, que
+    el JS mantiene al subir, bajar, agregar o quitar. Cada clave es "L<pk>"
+    para una línea que ya existía y "N<n>" para una nueva.
+
+    El texto se conserva tal cual, salvo los espacios del final. Las corridas
+    de 2+ espacios de adentro son significativas: el certificado parte la
+    línea en sus dos columnas por la primera de ellas (ver
+    certificado._dividir_parametro_especificacion), así que colapsarlas
+    rompería el documento.
+    """
+    ids_validos = set(producto.lineas_frescas().values_list('pk', flat=True))
+    filas = []
+    for clave in datos.get('orden', '').split(','):
+        clave = clave.strip()
+        if not clave:
+            continue
+
+        pk = None
+        if clave.startswith('L'):
+            if not clave[1:].isdigit():
+                continue
+            pk = int(clave[1:])
+            # Una clave que no es de este producto se ignora: nadie debe poder
+            # tocar la especificación de otro producto mandando un id a mano.
+            if pk not in ids_validos:
+                continue
+        elif not clave.startswith('N'):
+            continue
+
+        filas.append({
+            'clave': clave,
+            'id': pk,
+            'texto': datos.get(f'texto-{clave}', '').rstrip(),
+            'es_continuacion': bool(datos.get(f'continuacion-{clave}')),
+            'tipo_continuacion': (
+                datos.get(f'tipo-{clave}')
+                or LineaEspecificacion.TIPO_CONTINUACION_PARAMETROS
+            ),
+        })
+    return filas
+
+
+def _filas_del_catalogo(producto):
+    return [
+        {
+            'clave': f'L{linea.pk}',
+            'id': linea.pk,
+            'texto': linea.texto,
+            'es_continuacion': linea.es_continuacion,
+            'tipo_continuacion': (
+                linea.tipo_continuacion or LineaEspecificacion.TIPO_CONTINUACION_PARAMETROS
+            ),
+        }
+        for linea in producto.lineas_frescas()
+    ]
+
+
+def _con_resultados_del_pedido(filas, renglon):
+    """Le pega a cada fila el resultado capturado en ESTE pedido.
+
+    Se muestra de solo lectura al lado de cada línea: es el contexto que hizo
+    obvio el error, y es lo que se perdería si esa línea se borra o se marca
+    como continuación.
+    """
+    capturados = {r.linea_id: r.texto for r in renglon.resultados.all()}
+    for fila in filas:
+        fila['resultado'] = capturados.get(fila['id'], '')
+    return filas
+
+
+@login_required
+def especificacion_editar(request, pedido_pk, renglon_pk):
+    """Editor de la especificación de un producto, abierto desde un pedido.
+
+    A diferencia de la descripción, la especificación vive SOLO en el catálogo:
+    no hay copia por pedido. Así que aquí no hay casilla de "corregir también
+    en el catálogo", porque no habría otro destino posible: editar es editar el
+    catálogo, y eso afecta a todos los pedidos futuros de ese producto. Por eso
+    es una pantalla aparte con su propio modo, y no campos editables mezclados
+    con la captura de resultados.
+
+    Cualquier usuario puede entrar, incluido el rol "user": el punto de todo
+    esto es que corregir un dato mal importado no dependa de un admin.
+    """
+    pedido = get_object_or_404(Pedido.objects.select_related('cliente'), pk=pedido_pk)
+    renglon = get_object_or_404(
+        pedido.renglones.select_related('producto').prefetch_related('resultados'),
+        pk=renglon_pk,
+    )
+    producto = renglon.producto
+
+    # Desde un pedido emitido o cancelado no se entra. No porque editar el
+    # catálogo lo dañaría (su snapshot está congelado), sino porque ese renglón
+    # muestra las líneas del snapshot y no las del catálogo: se estaría
+    # editando una cosa creyendo ver otra.
+    if pedido.cancelado or pedido.emitido:
+        messages.info(
+            request,
+            'Este pedido ya está cerrado. La especificación se corrige desde un '
+            'pedido en curso o desde Catálogos.',
+        )
+        return redirect('pedido_detail', pk=pedido.pk)
+
+    destructivos = []
+    error = None
+    filas = None
+
+    if request.method == 'POST':
+        filas = _leer_filas_especificacion(request.POST, producto)
+
+        if not filas:
+            error = (
+                'La especificación quedaría sin ninguna línea. Esta pantalla es para '
+                'corregirla, no para quitarla: si de verdad este producto no debe '
+                'llevar especificación, hazlo desde Catálogos.'
+            )
+        else:
+            try:
+                producto.aplicar_especificacion(
+                    filas,
+                    usuario=request.user,
+                    pedido=pedido,
+                    confirmado=bool(request.POST.get('confirmado')),
+                    huella=request.POST.get('huella', ''),
+                )
+            except EspecificacionCambiadaPorOtro:
+                error = (
+                    'Alguien más cambió la especificación de este producto mientras '
+                    'esta pantalla estaba abierta. Para no borrar su trabajo no se '
+                    'guardó nada: abajo está la especificación como quedó ahora, '
+                    'vuelve a hacer tu corrección sobre ella.'
+                )
+                filas = None
+            except EspecificacionDestruyeResultados as destruccion:
+                destructivos = destruccion.impacto
+            else:
+                messages.success(
+                    request, f'Especificación de {producto.modelo} actualizada.',
+                )
+                return redirect('pedido_resultados', pk=pedido.pk)
+
+    if filas is None:
+        filas = _filas_del_catalogo(producto)
+
+    # Cuántos pedidos en curso usan este producto. Editar los afecta a todos, y
+    # el usuario no tiene forma de verlos desde aquí.
+    pedidos_en_curso = (
+        RenglonPedido.objects
+        .filter(producto=producto, pedido__emitido=False)
+        .values('pedido')
+        .distinct()
+        .count()
+    )
+
+    return render(request, 'core/especificacion_editar.html', {
+        'pedido': pedido,
+        'renglon': renglon,
+        'producto': producto,
+        'filas': _con_resultados_del_pedido(filas, renglon),
+        'destructivos': destructivos,
+        'error': error,
+        'pedidos_en_curso': pedidos_en_curso,
+        # Se recalcula sobre el estado de ahora: si cambió desde que se cargó
+        # la pantalla, el guardado se rechaza y se vuelve a mostrar.
+        'huella': producto.hash_especificacion(),
+        'tipos_continuacion': LineaEspecificacion.TIPO_CONTINUACION_CHOICES,
     })
 
 
