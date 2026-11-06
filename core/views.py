@@ -8,7 +8,12 @@ from django.views.decorators.http import require_POST
 
 from .certificado import generar_pdf_certificado_renglon, generar_pdf_certificados_pedido
 from .etiquetas import generar_pdf_calibracion, generar_pdf_etiquetas
-from .forms import ConfiguracionForm, PedidoForm, RenglonPedidoFormSet
+from .forms import (
+    CAMPOS_CORREGIBLES,
+    ConfiguracionForm,
+    PedidoForm,
+    RenglonPedidoFormSet,
+)
 from .models import (
     Cliente,
     Configuracion,
@@ -29,29 +34,47 @@ LIMITE_BUSQUEDA = 20
 POSICIONES_VALIDAS = {1, 2, 3}
 
 
+# Qué método de Producto aplica la corrección de cada campo. El resto del
+# patrón (qué casilla, cómo se nombra al avisar) vive en forms.CAMPOS_CORREGIBLES.
+METODO_DE_CORRECCION = {
+    'descripcion': 'corregir_descripcion',
+    'unidad': 'corregir_unidad',
+}
+
+
 def _aplicar_correcciones_catalogo(formset, usuario, pedido):
-    """Propaga al catálogo la descripción de los renglones cuya casilla
+    """Propaga al catálogo los datos de los renglones cuya casilla
     "Corregir también en el catálogo" quedó marcada.
 
-    El formulario ya descartó las casillas cuyo texto no difiere del catálogo,
+    El formulario ya descartó las casillas cuyo valor no difiere del catálogo,
     y el formset ya rechazó que dos renglones del mismo producto pidan
-    descripciones distintas. Devuelve los modelos corregidos, para avisarle al
-    usuario qué cambió para todos los pedidos futuros.
+    correcciones que se contradicen. Devuelve {modelo: [qué se corrigió]} para
+    avisarle al usuario qué cambió para todos los pedidos futuros.
     """
-    corregidos = []
+    corregidos = {}
     vistos = set()
     for form in formset.forms:
         datos = form.cleaned_data
-        if not datos or datos.get('DELETE') or not datos.get('corregir_catalogo'):
+        if not datos or datos.get('DELETE'):
             continue
-        producto = datos['producto']
-        # Dos renglones del mismo producto traen dos instancias distintas en
-        # memoria; sin esto el segundo repetiría la corrección en la bitácora.
-        if producto.pk in vistos:
+        producto = datos.get('producto')
+        if not producto:
             continue
-        vistos.add(producto.pk)
-        if producto.corregir_descripcion(datos['descripcion'], usuario, pedido):
-            corregidos.append(producto.modelo)
+
+        for campo, casilla, nombre in CAMPOS_CORREGIBLES:
+            if not datos.get(casilla):
+                continue
+            # Dos renglones del mismo producto traen dos instancias distintas
+            # en memoria; sin esto el segundo repetiría la corrección en la
+            # bitácora. La clave lleva el campo porque un renglón puede
+            # corregir la descripción y otro la unidad del mismo producto.
+            if (producto.pk, campo) in vistos:
+                continue
+            vistos.add((producto.pk, campo))
+
+            corregir = getattr(producto, METODO_DE_CORRECCION[campo])
+            if corregir(datos[campo], usuario, pedido):
+                corregidos.setdefault(producto.modelo, []).append(nombre)
     return corregidos
 
 
@@ -63,11 +86,14 @@ def _avisar_correcciones(request, corregidos):
     """
     if not corregidos:
         return
-    modelos = ', '.join(corregidos)
+    partes = [
+        f'{modelo} ({" y ".join(campos)})'
+        for modelo, campos in sorted(corregidos.items())
+    ]
     messages.success(
         request,
-        f'Se corrigió la descripción en el catálogo de {modelos}. '
-        f'Los pedidos nuevos ya la usarán.',
+        f'Se corrigió el catálogo de {", ".join(partes)}. '
+        f'Los pedidos nuevos ya lo usarán.',
     )
 
 

@@ -139,6 +139,32 @@
         return revisar;
     }
 
+    // La unidad sigue el mismo patrón que la descripción, más simple porque es
+    // un selector de dos opciones: la casilla de corregir el catálogo aparece
+    // solo cuando la elegida es distinta a la que el catálogo tiene hoy, y si
+    // el usuario vuelve a la original se oculta y se desmarca.
+    //
+    // Esto es solo la pantalla: quien decide si se toca el catálogo es el
+    // servidor, comparando contra el valor de ese momento.
+    function activarUnidad(renglon) {
+        const unidad = renglon.querySelector('[name$="-unidad"]');
+        const producto = renglon.querySelector('[name$="-producto"]');
+        const casilla = renglon.querySelector('.corregir-unidad');
+        const marca = casilla.querySelector('input[type="checkbox"]');
+
+        function revisar() {
+            const catalogo = (renglon.dataset.unidadCatalogo || '').trim();
+            const elegida = (unidad.value || '').trim();
+            // Sin producto elegido no hay catálogo que corregir.
+            const distinto = producto.value !== '' && elegida !== '' && elegida !== catalogo;
+            casilla.hidden = !distinto;
+            if (!distinto) marca.checked = false;
+        }
+
+        unidad.addEventListener('change', revisar);
+        return revisar;
+    }
+
     function actualizarPesoNeto(renglon) {
         const bruto = parseFloat(renglon.querySelector('[name$="-peso_bruto"]').value);
         const tara = parseFloat(renglon.querySelector('[name$="-peso_tara"]').value);
@@ -154,13 +180,18 @@
         const onu = renglon.querySelector('[name$="-onu"]');
         const descripcion = renglon.querySelector('[name$="-descripcion"]');
         const revisarDescripcion = activarDescripcion(renglon);
+        const revisarUnidad = activarUnidad(renglon);
 
         attachAutocomplete(buscarProducto, '/api/productos/', (item) => {
             // Solo el modelo: el campo de al lado es el del nombre, y dejar
             // aquí "E7000 — NOMBRE" invita a escribir el modelo también allá.
             buscarProducto.value = item.valor;
             productoHidden.value = item.valor;
+            // Al cambiar de producto la unidad se rehace con la del nuevo,
+            // igual que la descripción: la del anterior ya no aplica.
+            renglon.dataset.unidadCatalogo = item.unidad;
             unidad.value = item.unidad;
+            revisarUnidad();
 
             // Al cambiar de producto la descripción se rehace con la del
             // nuevo: lo que se hubiera corregido para el anterior ya no
@@ -213,7 +244,9 @@
         // distinta a la del catálogo (porque se corrigió antes sin marcar la
         // casilla), la casilla aparece ofreciendo corregirlo ahora; y si el
         // producto no tiene descripción en el catálogo, sale el aviso.
+        // Lo mismo para la unidad.
         revisarDescripcion();
+        revisarUnidad();
 
         renglon.querySelector('.quitar-renglon').addEventListener('click', () => {
             renglon.querySelector('[name$="-DELETE"]').checked = true;

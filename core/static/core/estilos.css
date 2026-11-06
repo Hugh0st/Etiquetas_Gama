@@ -581,6 +581,10 @@ input[readonly] { background: var(--fondo); color: var(--tinta-2); }
 /* La descripción toma su propio renglón completo, para que no se lea como
    continuación del modelo. Es editable a propósito: aquí se corrigen los
    nombres que vinieron mal del sistema viejo. */
+/* La unidad es un selector de dos opciones: le basta su ancho natural, y la
+   casilla de corregir el catálogo cuelga debajo como en la descripción. */
+.campo-unidad { min-width: 150px; }
+
 .campo-descripcion { flex: 1 1 100%; max-width: 620px; }
 .campo-descripcion input[type="text"] { width: 100%; }
 

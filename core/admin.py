@@ -3,7 +3,7 @@ from django.contrib import admin
 
 from .models import (
     Cliente,
-    CorreccionDescripcionProducto,
+    CorreccionCampoProducto,
     CorreccionEspecificacionProducto,
     LineaEspecificacion,
     Producto,
@@ -58,42 +58,49 @@ class ProductoAdmin(admin.ModelAdmin):
     def save_model(self, request, obj, form, change):
         """Registra en la bitácora las correcciones hechas desde esta pantalla.
 
-        Así hay un solo lugar donde rastrear de dónde salió una descripción,
-        sin importar si se corrigió aquí o desde la captura del pedido. Se
-        compara contra lo que hay en la base y no contra form.changed_data,
-        porque normalizar el texto puede marcar el campo como cambiado aunque
-        el valor final sea el mismo.
+        Así hay un solo lugar donde rastrear de dónde salió un dato, sin
+        importar si se corrigió aquí o desde la captura del pedido. Se compara
+        contra lo que hay en la base y no contra form.changed_data, porque
+        normalizar el texto puede marcar el campo como cambiado aunque el valor
+        final sea el mismo.
         """
         if not change:
             super().save_model(request, obj, form, change)
             return
 
-        anterior = Producto.objects.values_list('descripcion', flat=True).get(pk=obj.pk)
+        campos = [c for c, _ in CorreccionCampoProducto.CAMPO_CHOICES]
+        antes = Producto.objects.values(*campos).get(pk=obj.pk)
         super().save_model(request, obj, form, change)
-        if anterior != obj.descripcion:
-            CorreccionDescripcionProducto.objects.create(
+
+        for campo in campos:
+            nuevo = getattr(obj, campo)
+            if antes[campo] == nuevo:
+                continue
+            CorreccionCampoProducto.objects.create(
                 producto=obj,
-                descripcion_anterior=anterior,
-                descripcion_nueva=obj.descripcion,
+                campo=campo,
+                valor_anterior=antes[campo],
+                valor_nuevo=nuevo,
                 usuario=request.user,
-                origen=CorreccionDescripcionProducto.ORIGEN_CATALOGO,
+                origen=CorreccionCampoProducto.ORIGEN_CATALOGO,
             )
 
 
-@admin.register(CorreccionDescripcionProducto)
-class CorreccionDescripcionProductoAdmin(admin.ModelAdmin):
-    """Bitácora de las correcciones a la descripción de un producto.
+@admin.register(CorreccionCampoProducto)
+class CorreccionCampoProductoAdmin(admin.ModelAdmin):
+    """Bitácora de las correcciones a un dato de un producto.
 
-    Es de solo lectura: sirve para rastrear de dónde salió un nombre, así que
-    no se agrega, ni se edita, ni se borra desde aquí. Se escribe sola cuando
-    alguien corrige una descripción, desde el pedido o desde Catálogos.
+    Es de solo lectura: sirve para rastrear de dónde salió un dato, así que no
+    se agrega, ni se edita, ni se borra desde aquí. Se escribe sola cuando
+    alguien corrige una descripción o una unidad, desde el pedido o desde
+    Catálogos.
     """
     list_display = (
-        'fecha', 'producto', 'descripcion_anterior', 'descripcion_nueva',
+        'fecha', 'producto', 'campo', 'valor_anterior', 'valor_nuevo',
         'usuario', 'procedencia',
     )
-    list_filter = ('origen', 'fecha', 'usuario')
-    search_fields = ('producto__modelo', 'descripcion_anterior', 'descripcion_nueva')
+    list_filter = ('campo', 'origen', 'fecha', 'usuario')
+    search_fields = ('producto__modelo', 'valor_anterior', 'valor_nuevo')
     date_hierarchy = 'fecha'
     list_select_related = ('producto', 'usuario', 'pedido')
 

@@ -7,7 +7,9 @@ renglón todavía no tiene producto, queda vacía.
 Comentario de varias líneas: va con esta etiqueta y no con la forma corta de
 llaves y gato, que solo oculta una línea y en varias se imprime en la página.
 {% endcomment %}
-<div class="renglon" data-descripcion-catalogo="{{ form.instance.producto.descripcion|default_if_none:'' }}">
+<div class="renglon"
+     data-descripcion-catalogo="{{ form.instance.producto.descripcion|default_if_none:'' }}"
+     data-unidad-catalogo="{{ form.instance.producto.unidad|default_if_none:'' }}">
     {{ form.id }}
     {{ form.DELETE }}
     <div class="renglon-cabecera">
@@ -58,9 +60,20 @@ llaves y gato, que solo oculta una línea y en varias se imprime en la página.
         </label>
     </div>
 
-    <div class="campo">
+    {% comment %}
+    Selector y no texto libre: solo hay dos unidades posibles y no queremos
+    variantes escritas a mano. Se autollena del catálogo al elegir el producto;
+    el catálogo solo cambia si se marca la casilla, que el JS muestra únicamente
+    cuando la unidad elegida es distinta a la del catálogo.
+    {% endcomment %}
+    <div class="campo campo-unidad">
         <label for="{{ form.unidad.id_for_label }}">{{ form.unidad.label }}</label>
         {{ form.unidad }}
+        {{ form.unidad.errors }}
+        <label class="corregir-catalogo corregir-unidad" hidden>
+            {{ form.corregir_unidad }}
+            <span>{{ form.corregir_unidad.label }}</span>
+        </label>
     </div>
     <div class="campo">
         <label for="{{ form.cas.id_for_label }}">{{ form.cas.label }}</label>

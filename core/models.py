@@ -139,20 +139,51 @@ class Producto(models.Model):
         nueva = normalizar_descripcion(nueva, self.modelo)
         if not nueva or nueva == self.descripcion:
             return None
+        return self._corregir_campo(
+            CorreccionCampoProducto.CAMPO_DESCRIPCION, nueva, usuario, pedido,
+        )
 
-        anterior = self.descripcion
+    def corregir_unidad(self, nueva, usuario, pedido=None):
+        """Corrige la unidad en el catálogo dejando registro de quién y cuándo.
+
+        Solo acepta uno de los dos valores válidos. No es paranoia: el campo de
+        unidad del renglón es un CharField suelto de 20 caracteres, y el
+        sistema viejo dejó variantes como 'KGS', 'KGM' o 'LTR.' que la
+        migración 0003 tuvo que normalizar. Que de aquí no entre una tercera
+        variante es justo el punto de usar un selector.
+
+        Devuelve el registro creado, o None si no había nada que cambiar.
+        """
+        nueva = (nueva or '').strip()
+        if nueva not in dict(self.UNIDAD_CHOICES) or nueva == self.unidad:
+            return None
+        return self._corregir_campo(
+            CorreccionCampoProducto.CAMPO_UNIDAD, nueva, usuario, pedido,
+        )
+
+    def _corregir_campo(self, campo, nuevo, usuario, pedido):
+        """Escribe el campo y su renglón de bitácora, en una sola transacción.
+
+        Cada corregir_* valida con sus propias reglas y delega aquí lo que es
+        igual para todos. Se guarda con update_fields para no pisar otros
+        campos: dos renglones del mismo pedido pueden traer dos instancias
+        distintas del mismo producto en memoria, una corrigiendo la descripción
+        y la otra la unidad.
+        """
+        anterior = getattr(self, campo)
         with transaction.atomic():
-            self.descripcion = nueva
-            self.save(update_fields=['descripcion'])
-            return CorreccionDescripcionProducto.objects.create(
+            setattr(self, campo, nuevo)
+            self.save(update_fields=[campo])
+            return CorreccionCampoProducto.objects.create(
                 producto=self,
-                descripcion_anterior=anterior,
-                descripcion_nueva=nueva,
+                campo=campo,
+                valor_anterior=anterior,
+                valor_nuevo=nuevo,
                 usuario=usuario,
                 pedido=pedido,
                 origen=(
-                    CorreccionDescripcionProducto.ORIGEN_PEDIDO if pedido
-                    else CorreccionDescripcionProducto.ORIGEN_CATALOGO
+                    CorreccionCampoProducto.ORIGEN_PEDIDO if pedido
+                    else CorreccionCampoProducto.ORIGEN_CATALOGO
                 ),
             )
 
@@ -620,7 +651,20 @@ class RenglonPedido(models.Model):
     # emitido no cambie si alguien corrige el catálogo después.
     descripcion = models.CharField(max_length=255, blank=True)
     cantidad = models.DecimalField(max_digits=12, decimal_places=3)
-    unidad = models.CharField(max_length=20, blank=True)
+    # Unidad tal como la lleva ESTE pedido. Se autollena con la del catálogo al
+    # elegir el producto y el usuario la puede corregir, igual que la
+    # descripción. La etiqueta y el certificado leen esta, no la del catálogo,
+    # así que un pedido emitido no cambia si el catálogo se corrige después.
+    #
+    # El max_length se queda en 20 y no baja a 4 como el del producto: el
+    # sistema viejo dejó variantes ('KGS', 'KGM.', 'LTR.') y acortar la columna
+    # las truncaría. Los choices son para documentar y para que el formulario
+    # valide; el comando normalizar_unidad_renglones limpia lo heredado.
+    unidad = models.CharField(
+        max_length=20,
+        blank=True,
+        choices=Producto.UNIDAD_CHOICES,
+    )
     cas = models.CharField(max_length=50, blank=True)
     onu = models.CharField(max_length=50, blank=True)
     paquetes = models.IntegerField(default=0)
@@ -779,38 +823,82 @@ class ResultadoLaboratorio(models.Model):
         return f'{self.renglon_id} [{self.orden}]'
 
 
-class CorreccionDescripcionProducto(models.Model):
-    """Bitácora de las correcciones a la descripción de un producto.
+class CorreccionProducto(models.Model):
+    """Lo que comparten las bitácoras de correcciones al catálogo.
 
-    Las descripciones se importaron del sistema de consola viejo y algunas
-    quedaron mal (nombres invertidos, por ejemplo). No se revisa el catálogo
-    completo: se corrige sobre la marcha, conforme cada producto se usa, desde
-    la captura del pedido o desde Catálogos. Cada corrección queda registrada
-    aquí para poder rastrear después de dónde salió un nombre.
+    Abstracta: no crea tabla. Solo recoge lo que de verdad es igual en las dos
+    bitácoras, para no duplicar la lógica de procedencia, que es la única parte
+    con enjundia.
 
-    Se escribe solo desde Producto.corregir_descripcion() y desde el admin de
-    Producto. No se edita a mano: es bitácora.
+    Los ForeignKey se quedan declarados en cada modelo concreto, no aquí: un
+    campo heredado de una base abstracta no se puede redefinir, y subirlos
+    obligaría a cambiarles el related_name a las dos bitácoras, lo que mueve
+    una tabla que no hace falta tocar. Lo mismo con `origen`: las etiquetas de
+    sus opciones son distintas en cada pantalla ("Captura del pedido" contra
+    "Captura de resultados"), y unificarlas sería perder precisión.
     """
     ORIGEN_PEDIDO = 'pedido'
     ORIGEN_CATALOGO = 'catalogo'
+
+    fecha = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        abstract = True
+        ordering = ['-fecha']
+
+    @property
+    def procedencia(self):
+        """Dónde se hizo la corrección, para leerla de un vistazo."""
+        if self.origen == self.ORIGEN_CATALOGO:
+            return 'Catálogos'
+        if self.pedido_id is None:
+            return 'Pedido (ya eliminado)'
+        return f'Pedido {self.pedido.folio or f"borrador #{self.pedido_id}"}'
+
+
+class CorreccionCampoProducto(CorreccionProducto):
+    """Bitácora de las correcciones a un dato suelto de un producto.
+
+    Los datos del catálogo se importaron del sistema de consola viejo y algunos
+    quedaron mal: descripciones con el nombre invertido, unidades que no
+    corresponden. No se revisa el catálogo completo: se corrige sobre la
+    marcha, conforme cada producto se usa, desde la captura del pedido o desde
+    Catálogos. Cada corrección queda aquí para poder rastrear después de dónde
+    salió un dato.
+
+    Una sola tabla para todos los campos escalares del producto, con `campo`
+    diciendo cuál: la forma (un antes, un después) es idéntica para la
+    descripción y para la unidad, y lo será para CAS y ONU si algún día se
+    corrigen igual. Así hay un único lugar donde preguntar qué le han cambiado
+    a un producto, en vez de una tabla por campo.
+
+    Se escribe solo desde Producto.corregir_descripcion(), corregir_unidad() y
+    el admin de Producto. No se edita a mano: es bitácora.
+    """
+    CAMPO_DESCRIPCION = 'descripcion'
+    CAMPO_UNIDAD = 'unidad'
+    CAMPO_CHOICES = [
+        (CAMPO_DESCRIPCION, 'Descripción'),
+        (CAMPO_UNIDAD, 'Unidad'),
+    ]
     ORIGEN_CHOICES = [
-        (ORIGEN_PEDIDO, 'Captura del pedido'),
-        (ORIGEN_CATALOGO, 'Catálogos'),
+        (CorreccionProducto.ORIGEN_PEDIDO, 'Captura del pedido'),
+        (CorreccionProducto.ORIGEN_CATALOGO, 'Catálogos'),
     ]
 
     producto = models.ForeignKey(
         Producto,
         on_delete=models.PROTECT,
-        related_name='correcciones_descripcion',
+        related_name='correcciones_campo',
     )
-    descripcion_anterior = models.CharField(max_length=255, blank=True)
-    descripcion_nueva = models.CharField(max_length=255)
+    campo = models.CharField(max_length=20, choices=CAMPO_CHOICES)
+    valor_anterior = models.CharField(max_length=255, blank=True)
+    valor_nuevo = models.CharField(max_length=255)
     usuario = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
-        related_name='correcciones_descripcion',
+        related_name='correcciones_campo',
     )
-    fecha = models.DateTimeField(auto_now_add=True)
     origen = models.CharField(max_length=10, choices=ORIGEN_CHOICES)
     # De qué pedido salió la corrección. SET_NULL y no CASCADE porque un
     # borrador sí se puede eliminar, y el registro no debe irse con él: el
@@ -821,25 +909,18 @@ class CorreccionDescripcionProducto(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='correcciones_descripcion',
+        related_name='correcciones_campo',
     )
 
-    class Meta:
-        ordering = ['-fecha']
-        verbose_name = 'Corrección de descripción'
-        verbose_name_plural = 'Correcciones de descripción'
+    class Meta(CorreccionProducto.Meta):
+        verbose_name = 'Corrección de dato del producto'
+        verbose_name_plural = 'Correcciones de datos del producto'
 
     def __str__(self):
-        return f'{self.producto_id}: "{self.descripcion_anterior}" → "{self.descripcion_nueva}"'
-
-    @property
-    def procedencia(self):
-        """Dónde se hizo la corrección, para leerla de un vistazo en la bitácora."""
-        if self.origen == self.ORIGEN_CATALOGO:
-            return 'Catálogos'
-        if self.pedido_id is None:
-            return 'Pedido (ya eliminado)'
-        return f'Pedido {self.pedido.folio or f"borrador #{self.pedido_id}"}'
+        return (
+            f'{self.producto_id} {self.campo}: '
+            f'"{self.valor_anterior}" -> "{self.valor_nuevo}"'
+        )
 
 
 class CorreccionEspecificacionProducto(models.Model):
@@ -856,7 +937,7 @@ class CorreccionEspecificacionProducto(models.Model):
     especificacion_snapshot, en vez de un diff línea por línea: con la foto
     entera siempre se puede reconstruir cualquier momento y comparar dos.
 
-    Hermana de CorreccionDescripcionProducto, con las mismas convenciones para
+    Hermana de CorreccionCampoProducto, con las mismas convenciones para
     que las dos bitácoras se lean igual en el admin. No se edita a mano.
     """
     ORIGEN_PEDIDO = 'pedido'

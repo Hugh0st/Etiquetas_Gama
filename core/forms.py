@@ -24,6 +24,19 @@ def anio_choices():
     return [('', '---------')] + [(str(a), str(a)) for a in range(actual - 5, actual + 11)]
 
 
+# Datos del producto que el usuario puede corregir desde la captura del pedido:
+# (campo del renglón, casilla que propaga al catálogo, cómo se nombra al avisar).
+#
+# Los dos siguen el mismo patrón: lo que el usuario pone se guarda SIEMPRE en el
+# renglón, y el catálogo solo se toca si marcó la casilla. Lo usan el clean() del
+# formset, para no dejar que dos renglones del mismo producto pidan correcciones
+# que se contradicen, y la vista, para aplicarlas.
+CAMPOS_CORREGIBLES = (
+    ('descripcion', 'corregir_catalogo', 'la descripción'),
+    ('unidad', 'corregir_unidad', 'la unidad'),
+)
+
+
 class PedidoForm(forms.ModelForm):
     cliente = forms.ModelChoiceField(
         queryset=Cliente.objects.all(),
@@ -53,6 +66,23 @@ class RenglonPedidoForm(forms.ModelForm):
         required=False,
         label='Corregir también en el catálogo',
     )
+    # Selector y no texto libre: son dos valores fijos. Hoy el campo es un
+    # TextInput con readonly, que es solo una pista del navegador, y el clean()
+    # no lo validaba, así que en el POST cabía cualquier cosa.
+    #
+    # Lleva opción vacía y required=False por el formset: un ChoiceField sin
+    # vacío siempre manda un valor, y eso haría que un renglón extra en blanco
+    # contara como "modificado" y pidiera producto. Si llega vacío, el clean()
+    # pone la del catálogo.
+    unidad = forms.ChoiceField(
+        choices=[('', '---------')] + list(Producto.UNIDAD_CHOICES),
+        required=False,
+        label='Unidad',
+    )
+    corregir_unidad = forms.BooleanField(
+        required=False,
+        label='Corregir también en el catálogo',
+    )
 
     class Meta:
         model = RenglonPedido
@@ -68,7 +98,6 @@ class RenglonPedidoForm(forms.ModelForm):
         }
         widgets = {
             'descripcion': forms.TextInput(attrs={'autocomplete': 'off'}),
-            'unidad': forms.TextInput(attrs={'readonly': 'readonly'}),
             'cantidad': forms.NumberInput(attrs={'step': '0.001'}),
             'peso_bruto': forms.NumberInput(attrs={'step': '0.001'}),
             'peso_tara': forms.NumberInput(attrs={'step': '0.001'}),
@@ -90,6 +119,25 @@ class RenglonPedidoForm(forms.ModelForm):
             mes, anio = self._separar_mes_anio(self.instance.produccion)
             self.initial.setdefault('produccion_mes', mes)
             self.initial.setdefault('produccion_anio', anio)
+            self._autocurar_unidad()
+
+    def _autocurar_unidad(self):
+        """Si la unidad guardada no es una de las dos, muestra la del producto.
+
+        La migración 0003 normalizó las variantes del sistema viejo ('KGS',
+        'KGM.', 'LTR.') pero solo en Producto, no en los renglones. Un renglón
+        viejo puede traer una de esas, y con un selector de dos opciones el
+        formulario la rechazaría: el pedido entero quedaría imposible de
+        guardar desde la pantalla, no solo ese renglón.
+
+        Así que se enseña la del catálogo y al guardar queda normalizada. El
+        comando normalizar_unidad_renglones hace la limpieza en bloque.
+        """
+        if self.instance.unidad in dict(Producto.UNIDAD_CHOICES):
+            return
+        if not self.instance.producto_id:
+            return
+        self.initial['unidad'] = self.instance.producto.unidad
 
     @staticmethod
     def _separar_mes_anio(valor):
@@ -147,6 +195,18 @@ class RenglonPedidoForm(forms.ModelForm):
             bool(cleaned.get('corregir_catalogo')) and descripcion != producto.descripcion
         )
 
+        # La unidad sigue el mismo patrón que la descripción. El ChoiceField ya
+        # rechazó cualquier valor que no sea uno de los dos, así que aquí solo
+        # falta el respaldo: si llegó vacío (renglón nuevo donde el JS no la
+        # puso, o renglón viejo con una variante heredada), se usa la del
+        # catálogo en vez de guardar una etiqueta sin unidad junto a los pesos.
+        unidad = (cleaned.get('unidad') or '').strip() or producto.unidad
+        cleaned['unidad'] = unidad
+
+        cleaned['corregir_unidad'] = (
+            bool(cleaned.get('corregir_unidad')) and unidad != producto.unidad
+        )
+
         cleaned['caducidad'] = self._combinar_mes_anio('caducidad', cleaned)
         cleaned['produccion'] = self._combinar_mes_anio('produccion', cleaned)
 
@@ -181,19 +241,21 @@ class BaseRenglonPedidoFormSet(BaseInlineFormSet):
             renglones_activos += 1
 
             # El mismo producto puede ir en dos renglones del pedido. Si los
-            # dos piden corregir el catálogo con textos distintos, en vez de
-            # dejar que gane el último se rechaza el guardado: el usuario
-            # tiene que decidir cuál es el nombre bueno.
-            if not form.cleaned_data.get('corregir_catalogo'):
-                continue
-            descripcion = form.cleaned_data['descripcion']
-            previa = correcciones.setdefault(producto.pk, descripcion)
-            if previa != descripcion:
-                raise forms.ValidationError(
-                    f'Hay dos renglones del producto {producto.pk} que piden corregir el '
-                    f'catálogo con descripciones distintas: «{previa}» y «{descripcion}». '
-                    f'Deja marcada la casilla solo en el renglón con el nombre correcto.'
-                )
+            # dos piden corregir el catálogo con valores distintos, en vez de
+            # dejar que gane el último se rechaza el guardado: el usuario tiene
+            # que decidir cuál es el bueno.
+            for campo, casilla, nombre in CAMPOS_CORREGIBLES:
+                if not form.cleaned_data.get(casilla):
+                    continue
+                valor = form.cleaned_data[campo]
+                clave = (producto.pk, campo)
+                previa = correcciones.setdefault(clave, valor)
+                if previa != valor:
+                    raise forms.ValidationError(
+                        f'Hay dos renglones del producto {producto.pk} que piden corregir '
+                        f'{nombre} en el catálogo con valores distintos: «{previa}» y '
+                        f'«{valor}». Deja marcada la casilla solo en el renglón correcto.'
+                    )
 
         if renglones_activos < 1:
             raise forms.ValidationError('El pedido debe tener al menos un renglón.')
